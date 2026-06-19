@@ -40,6 +40,9 @@ def load_data():
     if not Path(csv_path).exists():
         st.error("Data file not found.")
         st.stop()
+    if not Path(coords_path).exists():
+        st.error("Junction coordinates file not found.")
+        st.stop()
     with open(coords_path) as f:
         junction_coords = json.load(f)
     df = run_pipeline(csv_path, junction_coords=junction_coords)
@@ -62,6 +65,10 @@ def get_curbflex(_df):
 def get_cascade(_df, _coords):
     return run_cascade_analysis(_df, _coords)
 
+@st.cache_data
+def get_validation_results(_df, _models, _coords):
+    return run_validation(_df, _models, junction_coords=_coords)
+
 df, junction_coords = load_data()
 models = load_models(df)
 
@@ -73,10 +80,25 @@ def compute_pareto_stats(df):
         violation_count=('single_violation', 'count'),
     ).reset_index()
     junction_stats = junction_stats.sort_values('total_delay', ascending=False)
-    junction_stats['cumulative_delay_pct'] = junction_stats['total_delay'].cumsum() / junction_stats['total_delay'].sum() * 100
-    junction_stats['violation_pct'] = junction_stats['violation_count'] / junction_stats['violation_count'].sum() * 100
-    idx_82 = (junction_stats['cumulative_delay_pct'] >= 82).idxmax()
-    return junction_stats, junction_stats.loc[idx_82, 'violation_pct'], junction_stats.index.get_loc(idx_82) + 1, len(junction_stats)
+    total_delay = junction_stats['total_delay'].sum()
+    total_count = junction_stats['violation_count'].sum()
+    if total_delay > 0:
+        junction_stats['cumulative_delay_pct'] = junction_stats['total_delay'].cumsum() / total_delay * 100
+    else:
+        junction_stats['cumulative_delay_pct'] = 0.0
+    if total_count > 0:
+        junction_stats['violation_pct'] = junction_stats['violation_count'] / total_count * 100
+    else:
+        junction_stats['violation_pct'] = 0.0
+    reached_82 = junction_stats[junction_stats['cumulative_delay_pct'] >= 82]
+    if len(reached_82) > 0:
+        idx_82 = reached_82.index[0]
+        pareto_pct = junction_stats.loc[idx_82, 'violation_pct']
+        pareto_count = junction_stats.index.get_loc(idx_82) + 1
+    else:
+        pareto_pct = 100.0
+        pareto_count = len(junction_stats)
+    return junction_stats, pareto_pct, pareto_count, len(junction_stats)
 
 junction_stats, pareto_pct, pareto_count, total_junctions = compute_pareto_stats(df)
 
@@ -113,7 +135,7 @@ if page == "🚨 GO HERE NOW":
     violation_queue = df.groupby('mapped_junction').agg(
         total_delay=('congestion_cost', 'sum'),
         violation_count=('single_violation', 'count'),
-        top_vehicle=('vehicle_type', lambda x: x.mode()[0] if len(x) > 0 else 'UNKNOWN'),
+        top_vehicle=('vehicle_type', lambda x: x.mode().iloc[0] if len(x) > 0 and not x.mode().empty else 'UNKNOWN'),
         avg_gridlock=('gridlock_score', 'mean'),
         avg_lat=('latitude', 'mean'),
         avg_lon=('longitude', 'mean'),
@@ -260,7 +282,7 @@ elif page == "📊 Executive Overview":
 
     col1.metric("Total Violations", f"{total_violations:,}")
     col2.metric("Total Congestion Damage", f"{total_delay:,.0f} veh-min")
-    col3.metric("High-Impact Violations", f"{len(high_impact):,}", f"{len(high_impact)/total_violations*100:.1f}%")
+    col3.metric("High-Impact Violations", f"{len(high_impact):,}", f"{len(high_impact)/total_violations*100:.1f}%" if total_violations > 0 else "0.0%")
     col4.metric("Top Offending Junction", top_junction[:25])
 
     st.divider()
@@ -352,7 +374,7 @@ elif page == "✅ Validation":
     st.header("✅ Validation Results")
     st.caption("Model performance, cascade evidence, case studies")
 
-    validation_results = run_validation(df, models, junction_coords=junction_coords)
+    validation_results = get_validation_results(df, models, junction_coords)
     cascade = validation_results['cascade']
 
     col1, col2 = st.columns(2)
@@ -397,10 +419,10 @@ elif page == "📋 Weekly Report":
     col1, col2 = st.columns(2)
     with col1:
         st.metric("Total Violations", f"{total_violations:,}")
-        st.metric("High-Impact Violations", f"{len(high_impact):,}", f"{len(high_impact)/total_violations*100:.1f}%")
+        st.metric("High-Impact Violations", f"{len(high_impact):,}", f"{len(high_impact)/total_violations*100:.1f}%" if total_violations > 0 else "0.0%")
     with col2:
         st.metric("Total Congestion Damage", f"{total_delay:,.0f} veh-min")
-        st.metric("Avg Damage per Violation", f"{total_delay/total_violations:.1f} veh-min")
+        st.metric("Avg Damage per Violation", f"{total_delay/total_violations:.1f} veh-min" if total_violations > 0 else "0.0 veh-min")
 
     st.divider()
     st.subheader("Top 5 Junctions by Congestion Damage")

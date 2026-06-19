@@ -38,7 +38,7 @@ def run_cascade_validation(df: pd.DataFrame, junction_coords: dict) -> Dict[str,
     graph = build_adjacency_graph(junction_coords, max_distance_m=3000)
     lag_15 = compute_lag_correlation(df, graph, lag_minutes=15)
     lag_30 = compute_lag_correlation(df, graph, lag_minutes=30)
-    cascades = detect_cascades(df, lag_15, threshold_r=0.2)
+    cascades = detect_cascades(lag_15, threshold_r=0.2)
 
     # Summary statistics
     sig_15 = lag_15[lag_15['lag_correlation'] > 0.2] if len(lag_15) > 0 else pd.DataFrame()
