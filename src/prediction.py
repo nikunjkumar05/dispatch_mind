@@ -19,7 +19,6 @@ FEATURES = [
 
 
 def add_temporal_features(df: pd.DataFrame) -> pd.DataFrame:
-    """Add cyclical sin/cos encoding for hour and day_of_week (preserves 23→0 continuity)."""
     df = df.copy()
     df['is_morning_rush'] = df['hour'].between(7, 10).astype(int)
     df['is_evening_rush'] = df['hour'].between(17, 20).astype(int)
@@ -32,21 +31,17 @@ def add_temporal_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def prepare_features(df: pd.DataFrame):
-    """Add temporal features + label-encode categoricals. Returns (df, feature_names, encoders)."""
     df = add_temporal_features(df)
-
     le_vehicle = LabelEncoder()
     le_violation = LabelEncoder()
     df['vehicle_type_encoded'] = le_vehicle.fit_transform(df['vehicle_type'].astype(str))
     df['violation_type_encoded'] = le_violation.fit_transform(df['single_violation'].astype(str))
     df['is_junction'] = (~df['mapped_junction'].isin(['No Junction', 'Unknown'])).astype(int)
-
     encoders = {'vehicle': le_vehicle, 'violation': le_violation}
     return df, FEATURES, encoders
 
 
 def train_model(df: pd.DataFrame, features: list = None, model_type: str = 'xgboost', params: dict = None):
-    """Train on Nov-Jan, test on Feb (temporal split). Returns (model, metrics_dict)."""
     features = features or FEATURES
     train = df[df['month'].isin([11, 12, 1])]
     test = df[df['month'] == 2]
@@ -76,51 +71,6 @@ def train_model(df: pd.DataFrame, features: list = None, model_type: str = 'xgbo
     return model, metrics
 
 
-def get_feature_importance(model, features: list) -> pd.DataFrame:
-    """Extract and rank feature importance from trained model."""
-    return pd.DataFrame({'feature': features, 'importance': model.feature_importances_}).sort_values('importance', ascending=False)
-
-
-def predict_next_period(model, df: pd.DataFrame, target_hour: int, target_day: int = None):
-    """Predict congestion cost per junction for a specific future hour."""
-    junction_stats = df.groupby('mapped_junction').agg(
-        avg_lat=('latitude', 'mean'), avg_lon=('longitude', 'mean'),
-        avg_duration=('duration_minutes', 'median'), avg_severity=('severity', 'median'),
-        avg_distance=('junction_distance', 'median'),
-        top_vehicle=('vehicle_type', lambda x: x.mode()[0] if len(x) > 0 else 'CAR'),
-        top_violation=('single_violation', lambda x: x.mode()[0] if len(x) > 0 else 'WRONG PARKING'),
-    ).reset_index()
-
-    day = target_day if target_day is not None else int(df['day_of_week'].median())
-    month = int(df['month'].mode()[0])
-
-    pred = junction_stats.copy()
-    pred['hour'] = target_hour
-    pred['day_of_week'] = day
-    pred['month'] = month
-    pred['duration_minutes'] = pred['avg_duration']
-    pred['severity'] = pred['avg_severity'].astype(int)
-    pred['junction_distance'] = pred['avg_distance']
-    pred['latitude'] = pred['avg_lat']
-    pred['longitude'] = pred['avg_lon']
-    pred['vehicle_type'] = pred['top_vehicle']
-    pred['single_violation'] = pred['top_violation']
-
-    pred = add_temporal_features(pred)
-    # Encode using training distribution (fit on full df, not just pred)
-    le_v = LabelEncoder().fit(df['vehicle_type'].astype(str))
-    le_vio = LabelEncoder().fit(df['single_violation'].astype(str))
-    pred['vehicle_type_encoded'] = le_v.transform(pred['vehicle_type'].astype(str))
-    pred['violation_type_encoded'] = le_vio.transform(pred['single_violation'].astype(str))
-    pred['is_junction'] = (~pred['mapped_junction'].isin(['No Junction', 'Unknown'])).astype(int)
-
-    pred['predicted_cost'] = model.predict(pred[FEATURES].fillna(0)).round(2)
-    max_cost = pred['predicted_cost'].max()
-    pred['gridlock_score'] = (pred['predicted_cost'] / max_cost * 100).clip(0, 100).round(1) if max_cost > 0 else 0.0
-
-    return pred[['mapped_junction', 'avg_lat', 'avg_lon', 'predicted_cost', 'gridlock_score']].sort_values('predicted_cost', ascending=False)
-
-
 def save_model(model, filepath: str):
     Path(filepath).parent.mkdir(parents=True, exist_ok=True)
     with open(filepath, 'wb') as f:
@@ -129,40 +79,28 @@ def save_model(model, filepath: str):
 
 
 def run_prediction(df: pd.DataFrame, output_dir: str = 'outputs/models'):
-    """Run Stage 3: Train XGBoost + LightGBM, save models."""
     print("=" * 60)
     print("Stage 3: Prediction Engine")
     print("=" * 60)
 
-    print("\n[1/4] Preparing features...")
     df, features, encoders = prepare_features(df)
-
-    print("\n[2/4] Training XGBoost...")
     xgb_model, xgb_metrics = train_model(df, features, 'xgboost')
-
-    print("\n[3/4] Training LightGBM...")
     lgb_model, lgb_metrics = train_model(df, features, 'lightgbm')
 
-    print("\n[4/4] Feature importance (XGBoost):")
     if xgb_model:
-        imp = get_feature_importance(xgb_model, features)
+        imp = pd.DataFrame({'feature': features, 'importance': xgb_model.feature_importances_}).sort_values('importance', ascending=False)
+        print("\n  Top 5 features (XGBoost):")
         for _, r in imp.head(5).iterrows():
             print(f"    {r['feature']}: {r['importance']:.4f}")
-
-    if xgb_model:
         save_model(xgb_model, f'{output_dir}/xgboost_violation_predictor.pkl')
     if lgb_model:
         save_model(lgb_model, f'{output_dir}/lightgbm_violation_predictor.pkl')
 
-    print("=" * 60)
     print("Stage 3 complete.")
     print("=" * 60)
-
-    return {
-        'xgb_model': xgb_model, 'lgb_model': lgb_model,
-        'xgb_metrics': xgb_metrics, 'lgb_metrics': lgb_metrics,
-        'features': features, 'encoders': encoders,
-    }
+    return {'xgb_model': xgb_model, 'lgb_model': lgb_model,
+            'xgb_metrics': xgb_metrics, 'lgb_metrics': lgb_metrics,
+            'features': features, 'encoders': encoders}
 
 
 if __name__ == '__main__':
@@ -175,9 +113,4 @@ if __name__ == '__main__':
 
     df = run_pipeline('data/raw/violations.csv', junction_coords=coords)
     df = run_congestion_cost(df, junction_coords=coords)
-    results = run_prediction(df)
-
-    if results['xgb_model']:
-        print("\nPredicted hotspots for 6 PM:")
-        pred = predict_next_period(results['xgb_model'], df, target_hour=18)
-        print(pred.head(10).to_string())
+    run_prediction(df)

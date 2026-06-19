@@ -5,14 +5,12 @@ import pandas as pd
 from sklearn.metrics import r2_score, mean_absolute_error
 from typing import Dict, Any
 
-# Dataset spans Nov 2023 - Apr 2024 = ~20 weeks
 WEEKS_IN_DATASET = 20
 ASSUMED_ENFORCEMENT_REDUCTION = 0.40
 FUEL_SAVINGS_PER_VEH_MIN = 0.5
 
 
 def run_backtest(model, df: pd.DataFrame, features: list) -> Dict[str, Any]:
-    """Validate model on held-out Feb data (temporal split: train Nov-Jan, test Feb)."""
     if model is None:
         return {'r2': 0, 'mae': 0, 'test_size': 0}
 
@@ -28,11 +26,6 @@ def run_backtest(model, df: pd.DataFrame, features: list) -> Dict[str, Any]:
 
 
 def run_cascade_validation(df: pd.DataFrame, junction_coords: dict) -> Dict[str, Any]:
-    """Validate cascade hypothesis: when junction A jams, does B jam within 15-30 minutes?
-
-    This is the REAL validation (not simulated). Uses historical lag correlations
-    computed from the actual violation timestamps in the dataset.
-    """
     from src.cascade import build_adjacency_graph, compute_lag_correlation, detect_cascades
 
     graph = build_adjacency_graph(junction_coords, max_distance_m=3000)
@@ -40,7 +33,6 @@ def run_cascade_validation(df: pd.DataFrame, junction_coords: dict) -> Dict[str,
     lag_30 = compute_lag_correlation(df, graph, lag_minutes=30)
     cascades = detect_cascades(lag_15, threshold_r=0.2)
 
-    # Summary statistics
     sig_15 = lag_15[lag_15['lag_correlation'] > 0.2] if len(lag_15) > 0 else pd.DataFrame()
     sig_30 = lag_30[lag_30['lag_correlation'] > 0.2] if len(lag_30) > 0 else pd.DataFrame()
 
@@ -61,16 +53,12 @@ def run_cascade_validation(df: pd.DataFrame, junction_coords: dict) -> Dict[str,
         'longest_chain': ' -> '.join(cascades[0]['chain']) if cascades else 'N/A',
     }
 
-    print(f"  Cascade validation: {result['significant_pairs_15min']} significant pairs (15min lag)")
+    print(f"  Cascade: {result['significant_pairs_15min']} significant pairs (15min lag)")
     print(f"  Top pair: {result['top_from']} -> {result['top_to']} (r={result['max_correlation_15min']}, {result['top_distance']:.0f}m)")
-    print(f"  Cascade chains: {result['cascade_chains']}")
-    if cascades:
-        print(f"  Longest chain: {result['longest_chain']}")
     return result
 
 
 def run_silk_board_case_study(df: pd.DataFrame) -> Dict[str, Any]:
-    """Analyze top congestion junction (proxy for Silk Board if not found in data)."""
     silk = df[df['mapped_junction'].str.contains('Silk Board|Bommanahalli|HSR', case=False, na=False)]
     if len(silk) == 0:
         top_junction = df.groupby('mapped_junction')['congestion_cost'].sum().idxmax()
@@ -89,7 +77,6 @@ def run_silk_board_case_study(df: pd.DataFrame) -> Dict[str, Any]:
 
 
 def generate_one_deployment_example(df: pd.DataFrame) -> Dict[str, Any]:
-    """Generate 'one deployment' impact numbers: 'If BTP deploys at ONE junction for ONE month...'"""
     agg = df.groupby('mapped_junction').agg(
         total_delay=('congestion_cost', 'sum'), violation_count=('single_violation', 'count'),
     ).reset_index()
@@ -116,14 +103,12 @@ def generate_one_deployment_example(df: pd.DataFrame) -> Dict[str, Any]:
 
 
 def run_validation(df: pd.DataFrame, models: dict = None, junction_coords: dict = None) -> dict:
-    """Run Stage 6: Full validation — backtest + cascade evidence + case study + one-deployment."""
     print("=" * 60)
     print("Stage 6: Validation")
     print("=" * 60)
 
     results = {}
 
-    print("\n[1/4] Running backtest...")
     if models and models.get('xgb_model'):
         features = models.get('features', [])
         if features and not all(f in df.columns for f in features):
@@ -133,24 +118,18 @@ def run_validation(df: pd.DataFrame, models: dict = None, junction_coords: dict 
     else:
         results['backtest'] = {'r2': 0, 'mae': 0}
 
-    print("\n[2/4] Cascade validation (historical lag analysis)...")
     if junction_coords:
         results['cascade'] = run_cascade_validation(df, junction_coords)
     else:
         results['cascade'] = {'significant_pairs_15min': 0, 'max_correlation_15min': 0}
 
-    print("\n[3/4] Case study...")
     results['case_study'] = run_silk_board_case_study(df)
-
-    print("\n[4/4] One deployment example...")
     results['one_deployment'] = generate_one_deployment_example(df)
 
-    print("\n" + "=" * 60)
-    print(f"  XGBoost R2: {results['backtest']['r2']}")
+    print(f"\n  XGBoost R2: {results['backtest']['r2']}")
     print(f"  Cascade pairs: {results['cascade']['significant_pairs_15min']} (max r={results['cascade']['max_correlation_15min']})")
     print(f"  Case Study: {results['case_study']['junction']}")
     print(f"  One Deploy: {results['one_deployment']['if_enforced']['commuter_time_saved']}")
-    print("=" * 60)
     print("Stage 6 complete.")
     print("=" * 60)
     return results
@@ -169,4 +148,4 @@ if __name__ == '__main__':
     df = run_pipeline('data/raw/violations.csv', junction_coords=coords)
     df = run_congestion_cost(df, junction_coords=coords)
     models = run_prediction(df)
-    results = run_validation(df, models, junction_coords=coords)
+    run_validation(df, models, junction_coords=coords)
