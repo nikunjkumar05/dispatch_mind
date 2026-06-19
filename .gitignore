@@ -17,7 +17,7 @@ build/
 venv/
 env/
 .env
-
+.agents/
 # IDE
 .vscode/
 .idea/
