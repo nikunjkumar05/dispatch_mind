@@ -4,30 +4,16 @@ import json
 import numpy as np
 import pandas as pd
 from pathlib import Path
+import sys
 
-DURATION_BY_TYPE = {
-    'WRONG PARKING': 35, 'NO PARKING': 40, 'DOUBLE PARKING': 55,
-    'PARKING IN A MAIN ROAD': 45, 'PARKING ON FOOTPATH': 30,
-    'PARKING NEAR ROAD CROSSING': 25, 'PARKING NEAR BUSTOP/SCHOOL/HOSPITAL ETC': 20,
-    'PARKING OPPOSITE TO ANOTHER PARKED VEHICLE': 50,
-    'PARKING NEAR TRAFFIC LIGHT OR ZEBRA CROSS': 25,
-}
+sys.path.insert(0, str(Path(__file__).parent))
 
-VEHICLE_ADJUSTMENT = {
-    'SCOOTER': 0.8, 'MOTOR CYCLE': 0.7, 'MOPED': 0.7,
-    'PASSENGER AUTO': 0.9, 'CAR': 1.0, 'MAXI-CAB': 1.0, 'VAN': 1.0,
-    'JEEP': 1.0, 'SCHOOL VEHICLE': 1.0, 'OTHERS': 1.0,
-    'GOODS AUTO': 1.1, 'TEMPO': 1.1, 'MINI LORRY': 1.1,
-    'LGV': 1.2, 'BUS (BMTC/KSRTC)': 1.3, 'PRIVATE BUS': 1.3,
-    'TOURIST BUS': 1.3, 'HGV': 1.4, 'TANKER': 1.4,
-}
-
-SEVERITY_MAP = {
-    'DOUBLE PARKING': 3, 'PARKING IN A MAIN ROAD': 3,
-    'PARKING ON FOOTPATH': 2, 'PARKING NEAR ROAD CROSSING': 2,
-    'PARKING NEAR TRAFFIC LIGHT OR ZEBRA CROSS': 2,
-    'PARKING NEAR BUSTOP/SCHOOL/HOSPITAL ETC': 2,
-}
+from config import (
+    get_duration_base_by_type,
+    get_vehicle_adjustment,
+    get_temporal_factors,
+    get_config_value
+)
 
 
 def _parse_violation_types(raw) -> list:
@@ -57,20 +43,71 @@ def load_and_parse(csv_path: str) -> pd.DataFrame:
 
 
 def estimate_duration(df: pd.DataFrame) -> pd.DataFrame:
-    base = df['single_violation'].map(DURATION_BY_TYPE).fillna(35)
-    v_factor = df['vehicle_type'].map(VEHICLE_ADJUSTMENT).fillna(1.0)
-    hour = df['created_datetime'].dt.hour
-    t_factor = np.where(
-        (hour >= 8) & (hour <= 10), 1.2,
-        np.where((hour >= 17) & (hour <= 20), 1.2,
-        np.where((hour >= 22) | (hour <= 5), 0.7, 1.0)))
-    df['duration_minutes'] = (base * v_factor * t_factor).round(1)
-    print(f"  Duration: min={df['duration_minutes'].min()}, max={df['duration_minutes'].max()}")
+    # Calibrate duration using actual data where available
+    df = df.copy()
+    
+    # Use actual duration where closed_datetime is available
+    df['actual_duration'] = (df['closed_datetime'] - df['created_datetime']).dt.total_seconds() / 60
+    df['actual_duration'] = df['actual_duration'].clip(lower=0, upper=180)  # Reasonable bounds
+    
+    # Map base duration from config
+    df['base_duration'] = df['single_violation'].apply(get_duration_base_by_type)
+    
+    # Apply vehicle adjustment from config
+    df['vehicle_adjustment'] = df['vehicle_type'].map(lambda x: get_vehicle_adjustment(x)).fillna(1.0)
+    
+    # Apply temporal factors from config
+    df['temporal_factors'] = df['created_datetime'].dt.hour.apply(
+        lambda h: get_temporal_factors(h)['multiplier']
+    )
+    
+    # Blend actual data with formula (70% actual, 30% formula for training data)
+    # This creates a "ground truth" for model calibration
+    df['duration_minutes'] = (
+        0.7 * df['actual_duration'].fillna(0) +
+        0.3 * (df['base_duration'] * df['vehicle_adjustment'] * df['temporal_factors'])
+    )
+    
+    # For violations without actual duration, use formula
+    df.loc[df['actual_duration'].isna(), 'duration_minutes'] = (
+        df.loc[df['actual_duration'].isna(), 'base_duration'] *
+        df.loc[df['actual_duration'].isna(), 'vehicle_adjustment'] *
+        df.loc[df['actual_duration'].isna(), 'temporal_factors']
+    )
+    
+    df['duration_minutes'] = df['duration_minutes'].round(1)
+    
+    # Log calibration statistics
+    actual_count = df['actual_duration'].notna().sum()
+    formula_count = df['actual_duration'].isna().sum()
+    print(f"  Duration calibration: {actual_count:,} actual, {formula_count:,} formula")
+    print(f"  Duration: min={df['duration_minutes'].min()}, max={df['duration_minutes'].max()}, mean={df['duration_minutes'].mean():.1f}")
+    
+    # Save calibration data for analysis
+    calibration_data = df[['single_violation', 'vehicle_type', 'created_datetime', 
+                          'actual_duration', 'base_duration', 'vehicle_adjustment', 
+                          'temporal_factors', 'duration_minutes']].copy()
+    calibration_data.to_csv('data/processed/duration_calibration.csv', index=False)
+    
     return df
 
 
 def classify_severity(df: pd.DataFrame) -> pd.DataFrame:
-    df['severity'] = df['single_violation'].map(SEVERITY_MAP).fillna(1).astype(int)
+    from config import get_severity_map
+    
+    # Get severity mapping from config
+    severity_map = get_severity_map()
+    
+    # For backward compatibility, use default if not in config
+    if not severity_map:
+        severity_map = {
+            'DOUBLE PARKING': 3, 'PARKING IN A MAIN ROAD': 3,
+            'PARKING ON FOOTPATH': 2, 'PARKING NEAR ROAD CROSSING': 2,
+            'PARKING NEAR TRAFFIC LIGHT OR ZEBRA CROSS': 2,
+            'PARKING NEAR BUSTOP/SCHOOL/HOSPITAL ETC': 2,
+        }
+    
+    df['severity'] = df['single_violation'].map(severity_map).fillna(1).astype(int)
     print(f"  Severity: {dict(df['severity'].value_counts().sort_index())}")
     return df
 

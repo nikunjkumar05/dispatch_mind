@@ -3,13 +3,23 @@
 import numpy as np
 import pandas as pd
 from typing import List, Dict
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+from config import get_config_value
 
 
-def detect_chronic_violation_zones(df: pd.DataFrame, weekly_threshold: int = 50) -> pd.DataFrame:
+def detect_chronic_violation_zones(df: pd.DataFrame, weekly_threshold: int = None) -> pd.DataFrame:
     """Detect junctions with consistently high violations (>threshold per week) — indicates infrastructure problem."""
     df = df.copy()
     if not pd.api.types.is_datetime64_any_dtype(df['created_datetime']):
         df['created_datetime'] = pd.to_datetime(df['created_datetime'], format='ISO8601', errors='coerce')
+
+    # Use config value if not provided
+    if weekly_threshold is None:
+        weekly_threshold = get_config_value('curbflex', 'weekly_threshold', 50)
 
     df['week'] = df['created_datetime'].dt.isocalendar()['week'].astype(int)
     df['year'] = df['created_datetime'].dt.year
@@ -73,11 +83,16 @@ def detect_enforcement_equity(df: pd.DataFrame) -> pd.DataFrame:
     return zone_stats
 
 
-def run_curbflex(df: pd.DataFrame, weekly_threshold: int = 50) -> dict:
+def run_curbflex(df: pd.DataFrame, weekly_threshold: int = None) -> dict:
     """Run Stage 5: CurbFlex analysis — chronic zones + policy + equity."""
     print("=" * 60)
     print("Stage 5: CurbFlex — Chronic Zones + Enforcement Equity")
     print("=" * 60)
+
+    # Use config value if not provided
+    if weekly_threshold is None:
+        curbflex_config = get_curbflex_config()
+        weekly_threshold = curbflex_config.get('weekly_threshold', 50)
 
     print("\n[1/3] Detecting chronic violation zones...")
     chronic = detect_chronic_violation_zones(df, weekly_threshold)

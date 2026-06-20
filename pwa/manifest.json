@@ -1,0 +1,22 @@
+{
+    "name": "DispatchMind — BTP Co-Pilot",
+    "short_name": "DispatchMind",
+    "description": "Your constable's co-pilot. Your city's clear path. Bengaluru Traffic Police enforcement intelligence.",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#0A1628",
+    "theme_color": "#0A1628",
+    "orientation": "portrait-primary",
+    "icons": [
+        {
+            "src": "icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png"
+        },
+        {
+            "src": "icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png"
+        }
+    ]
+}

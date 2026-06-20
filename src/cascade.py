@@ -8,13 +8,23 @@ import numpy as np
 import pandas as pd
 from collections import deque
 from itertools import combinations
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent))
+
+from config import get_config_value
 
 
-def build_adjacency_graph(junction_coords: dict, max_distance_m: float = 3000) -> pd.DataFrame:
+def build_adjacency_graph(junction_coords: dict, max_distance_m: float = None) -> pd.DataFrame:
     jnames = list(junction_coords.keys())
     jlats = np.array([junction_coords[j][0] for j in jnames])
     jlons = np.array([junction_coords[j][1] for j in jnames])
     cos_lat = np.cos(np.radians(np.mean(jlats)))
+
+    # Use config value if not provided
+    if max_distance_m is None:
+        max_distance_m = get_config_value('cascades', 'adjacency_max_distance_m', 3000)
 
     edges = []
     for i, j in combinations(range(len(jnames)), 2):
@@ -29,7 +39,7 @@ def build_adjacency_graph(junction_coords: dict, max_distance_m: float = 3000) -
 
 
 def compute_lag_correlation(df: pd.DataFrame, graph: pd.DataFrame, lag_minutes: int = 15,
-                            min_violations: int = 5) -> pd.DataFrame:
+                            min_violations: int = None) -> pd.DataFrame:
     df = df.copy()
     df['time_bin'] = df['created_datetime'].dt.floor(f'{lag_minutes}min')
     bin_counts = df.groupby(['mapped_junction', 'time_bin']).size().reset_index(name='count')
@@ -37,6 +47,12 @@ def compute_lag_correlation(df: pd.DataFrame, graph: pd.DataFrame, lag_minutes: 
     bin_by_junction = {}
     for name, group in bin_counts.groupby('mapped_junction'):
         bin_by_junction[name] = group.set_index('time_bin')['count']
+
+    # Use config values if not provided
+    if min_violations is None:
+        min_violations = get_config_value('cascades', 'min_violations_for_test', 5)
+    
+    min_common_bins = get_config_value('cascades', 'min_common_bins', 10)
 
     results = []
     for _, edge in graph.iterrows():
@@ -50,7 +66,7 @@ def compute_lag_correlation(df: pd.DataFrame, graph: pd.DataFrame, lag_minutes: 
             continue
 
         common = a_data.index.intersection(b_data.index)
-        if len(common) < 10:
+        if len(common) < min_common_bins:
             continue
 
         a_aligned = a_data.reindex(common, fill_value=0)
@@ -77,8 +93,9 @@ def compute_lag_correlation(df: pd.DataFrame, graph: pd.DataFrame, lag_minutes: 
     lag_df = pd.DataFrame(results)
     if len(lag_df) > 0:
         lag_df = lag_df.sort_values('lag_correlation', ascending=False)
-        significant = lag_df[lag_df['lag_correlation'] > 0.2]
-        print(f"  Lag analysis ({lag_minutes}min): {len(lag_df)} pairs tested, {len(significant)} significant (r>0.2)")
+        correlation_threshold = get_config_value('cascades', 'correlation_threshold', 0.2)
+        significant = lag_df[lag_df['lag_correlation'] > correlation_threshold]
+        print(f"  Lag analysis ({lag_minutes}min): {len(lag_df)} pairs tested, {len(significant)} significant (r>{correlation_threshold})")
     else:
         print("  Lag analysis: no significant correlations found")
     return lag_df
@@ -157,14 +174,71 @@ def simulate_cascade(df: pd.DataFrame, junction_coords: dict, source_junction: s
     return result
 
 
+def compute_lag_window_comparison(df: pd.DataFrame, graph: pd.DataFrame,
+                                   windows: list = None) -> pd.DataFrame:
+    """Test correlation at different lag windows to prove 15-min is strongest (physical propagation)."""
+    windows = windows or get_config_value('cascades', 'lag_windows', [5, 15, 30, 60])
+    correlation_threshold = get_config_value('cascades', 'correlation_threshold', 0.2)
+    
+    results = []
+    for w in windows:
+        lag_df = compute_lag_correlation(df, graph, lag_minutes=w)
+        if len(lag_df) == 0:
+            continue
+        sig = lag_df[lag_df['lag_correlation'] > correlation_threshold]
+        results.append({
+            'lag_window_min': w,
+            'pairs_tested': len(lag_df),
+            'significant_pairs': len(sig),
+            'mean_correlation': round(sig['lag_correlation'].mean(), 4) if len(sig) > 0 else 0,
+            'max_correlation': round(sig['lag_correlation'].max(), 4) if len(sig) > 0 else 0,
+        })
+    out = pd.DataFrame(results)
+    if len(out) > 0:
+        best = out.loc[out['max_correlation'].idxmax()]
+        print(f"  Lag window comparison: best={int(best['lag_window_min'])}min (r={best['max_correlation']})")
+    return out
+
+
+def compute_direction_test(df: pd.DataFrame, graph: pd.DataFrame, lag_minutes: int = 15,
+                           top_n: int = 5, min_violations: int = 5) -> pd.DataFrame:
+    """For top pairs, compare forward (A→B) vs reverse (B→A) correlation. Forward > reverse = cascade evidence."""
+    lag_fwd = compute_lag_correlation(df, graph, lag_minutes=lag_minutes, min_violations=min_violations)
+    if len(lag_fwd) == 0:
+        return pd.DataFrame()
+
+    top_pairs = lag_fwd.nlargest(top_n, 'lag_correlation')
+    rows = []
+    for _, row in top_pairs.iterrows():
+        a, b = row['from_junction'], row['to_junction']
+        rev_edge = graph[(graph['from'] == b) & (graph['to'] == a)]
+        if len(rev_edge) == 0:
+            continue
+        rev_lag = compute_lag_correlation(df, rev_edge, lag_minutes=lag_minutes, min_violations=min_violations)
+        rev_corr = rev_lag['lag_correlation'].iloc[0] if len(rev_lag) > 0 else 0
+        rows.append({
+            'pair': f"{a} → {b}",
+            'forward_r': row['lag_correlation'],
+            'reverse_r': round(rev_corr, 4),
+            'asymmetry': round(row['lag_correlation'] - rev_corr, 4),
+            'distance_m': row['distance_m'],
+        })
+    out = pd.DataFrame(rows)
+    if len(out) > 0:
+        avg_asym = out['asymmetry'].mean()
+        print(f"  Direction test: avg asymmetry={avg_asym:.4f} (positive = cascade evidence)")
+    return out
+
+
 def run_cascade_analysis(df: pd.DataFrame, junction_coords: dict) -> dict:
     print("=" * 60)
     print("Cascade Analysis — Historical Lag + Propagation")
     print("=" * 60)
 
-    graph = build_adjacency_graph(junction_coords, max_distance_m=3000)
+    graph = build_adjacency_graph(junction_coords)
     lag_df = compute_lag_correlation(df, graph, lag_minutes=15)
-    cascades = detect_cascades(lag_df, threshold_r=0.2)
+    correlation_threshold = get_config_value('cascades', 'correlation_threshold', 0.2)
+    cascades = detect_cascades(lag_df, threshold_r=correlation_threshold)
 
     if len(lag_df) > 0:
         print("\n  Top 5 cascade pairs:")
@@ -175,9 +249,13 @@ def run_cascade_analysis(df: pd.DataFrame, junction_coords: dict) -> dict:
         print(f"\n  Longest cascade chain: {' -> '.join(cascades[0]['chain'])}")
         print(f"  Total correlation: {cascades[0]['total_correlation']:.4f}")
 
+    lag_windows = compute_lag_window_comparison(df, graph)
+    direction = compute_direction_test(df, graph)
+
     print("Cascade Analysis complete.")
     print("=" * 60)
-    return {'graph': graph, 'lag_correlations': lag_df, 'cascades': cascades}
+    return {'graph': graph, 'lag_correlations': lag_df, 'cascades': cascades,
+            'lag_windows': lag_windows, 'direction_test': direction}
 
 
 if __name__ == '__main__':

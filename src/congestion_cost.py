@@ -2,27 +2,16 @@
 
 import numpy as np
 import pandas as pd
+import sys
+from pathlib import Path
 
-VEHICLE_WIDTH = {
-    'SCOOTER': 0.8, 'MOTOR CYCLE': 0.7, 'MOPED': 0.6,
-    'PASSENGER AUTO': 1.5, 'CAR': 1.8, 'MAXI-CAB': 1.8, 'VAN': 1.8,
-    'JEEP': 2.0, 'GOODS AUTO': 1.8, 'TEMPO': 2.0,
-    'LGV': 2.2, 'MINI LORRY': 2.2,
-    'BUS (BMTC/KSRTC)': 2.5, 'HGV': 2.5, 'TANKER': 2.5,
-    'PRIVATE BUS': 2.5, 'TOURIST BUS': 2.5, 'SCHOOL VEHICLE': 2.0, 'OTHERS': 1.8,
-}
+sys.path.insert(0, str(Path(__file__).parent))
 
-VEHICLE_SIZE_MULT = {
-    'TANKER': 2.5, 'BUS (BMTC/KSRTC)': 2.5, 'HGV': 2.5,
-    'PRIVATE BUS': 2.5, 'TOURIST BUS': 2.5,
-    'LGV': 2.2, 'MINI LORRY': 2.2,
-    'CAR': 1.8, 'VAN': 1.8, 'MAXI-CAB': 1.8, 'JEEP': 1.8,
-    'TEMPO': 1.8, 'GOODS AUTO': 1.8,
-    'PASSENGER AUTO': 1.0, 'SCOOTER': 1.0, 'MOTOR CYCLE': 1.0,
-    'MOPED': 1.0, 'SCHOOL VEHICLE': 1.0, 'OTHERS': 1.0,
-}
-
-DEFAULT_LANE_WIDTH = 3.5
+from config import (
+    get_vehicle_size_mult,
+    get_config_value,
+    get_junction_distance_threshold
+)
 
 
 def compute_distance_to_junction(df: pd.DataFrame, junction_coords: dict) -> pd.DataFrame:
@@ -50,19 +39,28 @@ def compute_congestion_cost(df: pd.DataFrame, junction_coords: dict, road_width:
 
     df = compute_distance_to_junction(df, junction_coords)
 
-    veh_width = df['vehicle_type'].map(VEHICLE_WIDTH).fillna(1.8)
-    df['lane_block'] = (veh_width / (road_width / 2)).clip(upper=1.0).round(3)
+    # Get vehicle width from config
+    vehicle_width = df['vehicle_type'].map(get_config_value('formula', 'congestion', {}).get('vehicle_width', {})).fillna(1.8)
+    df['lane_block'] = (vehicle_width / (road_width / 2)).clip(upper=1.0).round(3)
 
     hour = df['created_datetime'].dt.hour
     df['peak'] = np.where(
         ((hour >= 7) & (hour < 10)) | ((hour >= 17) & (hour <= 20)), 2.0,
         np.where((hour >= 22) | (hour <= 5), 0.5, 1.0))
 
+    # Get junction distance thresholds from config
+    critical_dist = get_junction_distance_threshold('CRITICAL')
+    high_dist = get_junction_distance_threshold('HIGH')
+    medium_dist = get_junction_distance_threshold('MEDIUM')
+    
     df['junction_mult'] = np.select(
-        [df['junction_distance'] < 10, df['junction_distance'] < 30, df['junction_distance'] < 50],
+        [df['junction_distance'] < critical_dist, 
+         df['junction_distance'] < high_dist, 
+         df['junction_distance'] < medium_dist],
         [3.0, 2.0, 1.5], default=1.0)
 
-    df['vehicle_mult'] = df['vehicle_type'].map(VEHICLE_SIZE_MULT).fillna(1.0)
+    # Get vehicle size multiplier from config
+    df['vehicle_mult'] = df['vehicle_type'].map(get_vehicle_size_mult).fillna(1.0)
 
     df['congestion_cost'] = (
         df['duration_minutes'] * df['lane_block'] * df['peak']
@@ -72,8 +70,20 @@ def compute_congestion_cost(df: pd.DataFrame, junction_coords: dict, road_width:
     max_cost = df['congestion_cost'].max()
     df['gridlock_score'] = (df['congestion_cost'] / max_cost * 100).clip(0, 100).round(1) if max_cost > 0 else 0.0
 
+    p50 = df['gridlock_score'].quantile(0.50)
+    p80 = df['gridlock_score'].quantile(0.80)
+    p95 = df['gridlock_score'].quantile(0.95)
+    df['impact_tier'] = pd.cut(
+        df['gridlock_score'],
+        bins=[0, p50, p80, p95, 100],
+        labels=['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
+        include_lowest=True,
+    )
+
+    tier_dist = df['impact_tier'].value_counts()
     print(f"  CongestionCost: min={df['congestion_cost'].min():.2f}, max={df['congestion_cost'].max():.2f}, mean={df['congestion_cost'].mean():.2f}")
     print(f"  Gridlock Score: min={df['gridlock_score'].min():.1f}, max={df['gridlock_score'].max():.1f}")
+    print(f"  Impact Tiers: {tier_dist.to_dict()}")
     return df
 
 

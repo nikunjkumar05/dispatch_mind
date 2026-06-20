@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <meta name="theme-color" content="#0A1628">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>DispatchMind — BTP Co-Pilot</title>
+    <link rel="manifest" href="manifest.json">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,600;0,9..40,700;0,9..40,800;1,9..40,400&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Role Selector -->
+    <div id="role-screen" class="screen active">
+        <div class="role-container">
+            <div class="role-logo">
+                <div class="logo-icon">🚔</div>
+                <h1 class="logo-title">DispatchMind</h1>
+                <p class="logo-sub">Your constable's co-pilot.<br>Your city's clear path.</p>
+            </div>
+            <p class="role-label">I am a...</p>
+            <div class="role-buttons">
+                <button class="role-btn" data-role="constable">
+                    <span class="role-icon">👮</span>
+                    <span class="role-name">Constable</span>
+                    <span class="role-desc">On Beat — What do I clear right now?</span>
+                </button>
+                <button class="role-btn" data-role="si">
+                    <span class="role-icon">📋</span>
+                    <span class="role-name">Sub-Inspector</span>
+                    <span class="role-desc">Station — How is my team doing?</span>
+                </button>
+                <button class="role-btn" data-role="acp">
+                    <span class="role-icon">📊</span>
+                    <span class="role-name">ACP / Commissioner</span>
+                    <span class="role-desc">Strategy — What's the plan?</span>
+                </button>
+            </div>
+            <p class="role-footer">Bengaluru Traffic Police · Gridlock Hackathon 2.0</p>
+        </div>
+    </div>
+
+    <!-- Constable View -->
+    <div id="constable-view" class="screen">
+        <header class="view-header">
+            <button class="back-btn" data-target="role-screen">←</button>
+            <div class="header-title">
+                <h1>Hoysala — <span id="constable-beat-name">Loading...</span></h1>
+                <div class="header-stats">
+                    <span class="stat-pill" id="constable-violations">— violations</span>
+                    <span class="stat-pill amber" id="constable-delay">— veh-min</span>
+                    <span class="stat-pill" id="constable-cleared-count">0 cleared</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="beat-selector">
+            <select id="constable-beat-select"></select>
+        </div>
+
+        <div id="constable-cards" class="cards-container"></div>
+
+        <div class="shift-summary" id="shift-summary" style="display:none;">
+            <div class="summary-inner">
+                <span class="summary-label">Shift Total</span>
+                <span class="summary-value" id="shift-delay-recovered">0</span>
+                <span class="summary-unit">veh-min recovered</span>
+            </div>
+        </div>
+
+        <div class="constable-actions">
+            <button class="action-btn" id="sms-btn">📱 Send SMS to Hoysala Patrol</button>
+        </div>
+    </div>
+
+    <!-- Sub-Inspector View -->
+    <div id="si-view" class="screen">
+        <header class="view-header">
+            <button class="back-btn" data-target="role-screen">←</button>
+            <div class="header-title">
+                <h1>Station — <span id="si-station-name">Loading...</span></h1>
+            </div>
+        </header>
+
+        <div class="beat-selector">
+            <select id="si-station-select"></select>
+        </div>
+
+        <div class="si-metrics" id="si-metrics"></div>
+
+        <div class="section-card">
+            <h2 class="section-title">Beat-Level Priority Load</h2>
+            <div id="si-beat-chart" class="chart-container"></div>
+        </div>
+
+        <div class="section-card">
+            <h2 class="section-title">Deployment Heatmap</h2>
+            <div id="si-heatmap" class="heatmap-container"></div>
+        </div>
+
+        <div class="section-card">
+            <h2 class="section-title">Reassignment Suggestion</h2>
+            <div id="si-reassign" class="reassign-box"></div>
+        </div>
+    </div>
+
+    <!-- ACP View -->
+    <div id="acp-view" class="screen">
+        <header class="view-header">
+            <button class="back-btn" data-target="role-screen">←</button>
+            <div class="header-title">
+                <h1>ACP / Commissioner</h1>
+            </div>
+        </header>
+
+        <div class="acp-tabs">
+            <button class="acp-tab active" data-tab="priority">Priority Map</button>
+            <button class="acp-tab" data-tab="futility">Enforcement Futility</button>
+            <button class="acp-tab" data-tab="cascade">Cascade Proof</button>
+            <button class="acp-tab" data-tab="repeat">Repeat Offenders</button>
+        </div>
+
+        <div id="acp-content" class="acp-content"></div>
+    </div>
+
+    <!-- SMS Modal -->
+    <div id="sms-modal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <h2>SMS to Hoysala Patrol</h2>
+            <pre id="sms-text"></pre>
+            <button class="action-btn" id="sms-close">Close</button>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+    <script>
+        if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.register('sw.js').catch(() => {});
+        }
+    </script>
+</body>
+</html>
