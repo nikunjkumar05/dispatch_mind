@@ -46,7 +46,6 @@ def _parse_violation_types(raw) -> list:
 def load_and_parse(csv_path: str) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
     df['created_datetime'] = pd.to_datetime(df['created_datetime'], format='ISO8601', utc=True).dt.tz_localize(None)
-    df['closed_datetime'] = pd.to_datetime(df['closed_datetime'], format='ISO8601', errors='coerce', utc=True).dt.tz_localize(None)
     df['hour'] = df['created_datetime'].dt.hour
     df['day_of_week'] = df['created_datetime'].dt.dayofweek
     df['month'] = df['created_datetime'].dt.month
@@ -60,51 +59,26 @@ def load_and_parse(csv_path: str) -> pd.DataFrame:
 
 
 def estimate_duration(df: pd.DataFrame) -> pd.DataFrame:
-    # Calibrate duration using actual data where available
+    """Estimate violation duration using domain-expert formula (no closed_date dependency)."""
     df = df.copy()
     
-    # Use actual duration where closed_datetime is available
-    df['actual_duration'] = (df['closed_datetime'] - df['created_datetime']).dt.total_seconds() / 60
-    df['actual_duration'] = df['actual_duration'].clip(lower=0, upper=180)  # Reasonable bounds
-    
-    # Map base duration from config
+    # Base duration from config by violation type
     df['base_duration'] = df['single_violation'].apply(get_duration_base_by_type)
     
-    # Apply vehicle adjustment from config
+    # Vehicle size adjustment from config
     df['vehicle_adjustment'] = df['vehicle_type'].map(lambda x: get_vehicle_adjustment(x)).fillna(1.0)
     
-    # Apply temporal factors from config
+    # Temporal multiplier (peak/off-peak/normal) from config
     df['temporal_factors'] = df['created_datetime'].dt.hour.apply(
         lambda h: get_temporal_factors(h)['multiplier']
     )
     
-    # Blend actual data with formula (70% actual, 30% formula for training data)
-    # This creates a "ground truth" for model calibration
+    # Pure formula: base × vehicle × temporal
     df['duration_minutes'] = (
-        0.7 * df['actual_duration'].fillna(0) +
-        0.3 * (df['base_duration'] * df['vehicle_adjustment'] * df['temporal_factors'])
-    )
+        df['base_duration'] * df['vehicle_adjustment'] * df['temporal_factors']
+    ).round(1)
     
-    # For violations without actual duration, use formula
-    df.loc[df['actual_duration'].isna(), 'duration_minutes'] = (
-        df.loc[df['actual_duration'].isna(), 'base_duration'] *
-        df.loc[df['actual_duration'].isna(), 'vehicle_adjustment'] *
-        df.loc[df['actual_duration'].isna(), 'temporal_factors']
-    )
-    
-    df['duration_minutes'] = df['duration_minutes'].round(1)
-    
-    # Log calibration statistics
-    actual_count = df['actual_duration'].notna().sum()
-    formula_count = df['actual_duration'].isna().sum()
-    print(f"  Duration calibration: {actual_count:,} actual, {formula_count:,} formula")
-    print(f"  Duration: min={df['duration_minutes'].min()}, max={df['duration_minutes'].max()}, mean={df['duration_minutes'].mean():.1f}")
-    
-    # Save calibration data for analysis
-    calibration_data = df[['single_violation', 'vehicle_type', 'created_datetime', 
-                          'actual_duration', 'base_duration', 'vehicle_adjustment', 
-                          'temporal_factors', 'duration_minutes']].copy()
-    calibration_data.to_csv('data/processed/duration_calibration.csv', index=False)
+    print(f"  Duration (formula-only): min={df['duration_minutes'].min()}, max={df['duration_minutes'].max()}, mean={df['duration_minutes'].mean():.1f}")
     
     return df
 
