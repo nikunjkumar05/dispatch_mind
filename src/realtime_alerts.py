@@ -74,7 +74,7 @@ class ViolationAlertSystem:
         
         new_lat = new_violation.get('latitude', 0)
         new_lon = new_violation.get('longitude', 0)
-        new_time = pd.to_datetime(new_violation.get('created_date'))
+        new_time = pd.to_datetime(new_violation.get('created_datetime', new_violation.get('created_date')))
         
         # Filter violations within time window
         time_diff = (recent_violations['created_datetime'] - new_time).abs()

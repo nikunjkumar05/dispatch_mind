@@ -89,10 +89,8 @@ def run_curbflex(df: pd.DataFrame, weekly_threshold: int = None) -> dict:
     print("Stage 5: CurbFlex — Chronic Zones + Enforcement Equity")
     print("=" * 60)
 
-    # Use config value if not provided
     if weekly_threshold is None:
-        curbflex_config = get_curbflex_config()
-        weekly_threshold = curbflex_config.get('weekly_threshold', 50)
+        weekly_threshold = get_config_value('curbflex', 'weekly_threshold', 50)
 
     print("\n[1/3] Detecting chronic violation zones...")
     chronic = detect_chronic_violation_zones(df, weekly_threshold)
