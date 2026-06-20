@@ -45,8 +45,8 @@ def _parse_violation_types(raw) -> list:
 
 def load_and_parse(csv_path: str) -> pd.DataFrame:
     df = pd.read_csv(csv_path)
-    df['created_datetime'] = pd.to_datetime(df['created_datetime'], format='ISO8601')
-    df['closed_datetime'] = pd.to_datetime(df['closed_datetime'], format='ISO8601', errors='coerce')
+    df['created_datetime'] = pd.to_datetime(df['created_datetime'], format='ISO8601', utc=True).dt.tz_localize(None)
+    df['closed_datetime'] = pd.to_datetime(df['closed_datetime'], format='ISO8601', errors='coerce', utc=True).dt.tz_localize(None)
     df['hour'] = df['created_datetime'].dt.hour
     df['day_of_week'] = df['created_datetime'].dt.dayofweek
     df['month'] = df['created_datetime'].dt.month

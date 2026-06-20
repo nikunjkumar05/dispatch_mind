@@ -2,7 +2,7 @@
   "version": "1.0.0",
   "city": "bengaluru",
   "data": {
-    "raw_path": "data/raw/violations.csv",
+    "raw_path": "jan to may police violation_anonymized791b166.csv",
     "processed_path": "data/processed/violations_scored.csv",
     "external_dir": "data/external"
   },
@@ -23,84 +23,109 @@
       "offpeak_multiplier": 0.7
     }
   },
-    "formula": {
-      "duration": {
-        "base_by_type": {
-          "WRONG PARKING": 35,
-          "NO PARKING": 40,
-          "DOUBLE PARKING": 55,
-          "PARKING IN A MAIN ROAD": 45,
-          "PARKING ON FOOTPATH": 30,
-          "PARKING NEAR ROAD CROSSING": 25,
-          "PARKING NEAR BUSTOP/SCHOOL/HOSPITAL ETC": 20,
-          "PARKING OPPOSITE TO ANOTHER PARKED VEHICLE": 50,
-          "PARKING NEAR TRAFFIC LIGHT OR ZEBRA CROSS": 25
-        },
-        "vehicle_adjustment": {
-          "SCOOTER": 0.8, "MOTOR CYCLE": 0.7, "MOPED": 0.7,
-          "PASSENGER AUTO": 0.9, "CAR": 1.0, "MAXI-CAB": 1.0, "VAN": 1.0,
-          "JEEP": 1.0, "SCHOOL VEHICLE": 1.0, "OTHERS": 1.0,
-          "GOODS AUTO": 1.1, "TEMPO": 1.1, "MINI LORRY": 1.1,
-          "LGV": 1.2, "BUS (BMTC/KSRTC)": 1.3, "PRIVATE BUS": 1.3,
-          "TOURIST BUS": 1.3, "HGV": 1.4, "TANKER": 1.4
-        }
+  "formula": {
+    "duration": {
+      "base_by_type": {
+        "WRONG PARKING": 35,
+        "NO PARKING": 40,
+        "DOUBLE PARKING": 55,
+        "PARKING IN A MAIN ROAD": 45,
+        "PARKING ON FOOTPATH": 30,
+        "PARKING NEAR ROAD CROSSING": 25,
+        "PARKING NEAR BUSTOP/SCHOOL/HOSPITAL ETC": 20,
+        "PARKING OPPOSITE TO ANOTHER PARKED VEHICLE": 50,
+        "PARKING NEAR TRAFFIC LIGHT OR ZEBRA CROSS": 25
       },
-      "congestion": {
-        "lane_width": 3.5,
-        "road_width": 7.0,
-        "junction_distance": {
-          "critical": 10,
-          "high": 30,
-          "medium": 50
-        },
-      "vehicle_size_mult": {
-        "TANKER": 2.5, "BUS (BMTC/KSRTC)": 2.5, "HGV": 2.5,
-        "PRIVATE BUS": 2.5, "TOURIST BUS": 2.5,
-        "LGV": 2.2, "MINI LORRY": 2.2,
-        "CAR": 1.8, "VAN": 1.8, "MAXI-CAB": 1.8, "JEEP": 1.8,
-        "TEMPO": 1.8, "GOODS AUTO": 1.8,
-        "PASSENGER AUTO": 1.0, "SCOOTER": 1.0, "MOTOR CYCLE": 1.0,
-        "MOPED": 1.0, "SCHOOL VEHICLE": 1.0, "OTHERS": 1.0
-      },
-      "vehicle_width": {
-        "SCOOTER": 0.8, "MOTOR CYCLE": 0.7, "MOPED": 0.6,
-        "PASSENGER AUTO": 1.5, "CAR": 1.8, "MAXI-CAB": 1.8, "VAN": 1.8,
-        "JEEP": 2.0, "GOODS AUTO": 1.8, "TEMPO": 2.0,
-        "LGV": 2.2, "MINI LORRY": 2.2,
-        "BUS (BMTC/KSRTC)": 2.5, "HGV": 2.5, "TANKER": 2.5,
-        "PRIVATE BUS": 2.5, "TOURIST BUS": 2.5, "SCHOOL VEHICLE": 2.0, "OTHERS": 1.8
-      }
-    }
-      },
-      "severity_map": {
-        "DOUBLE PARKING": 3, "PARKING IN A MAIN ROAD": 3,
-        "PARKING ON FOOTPATH": 2, "PARKING NEAR ROAD CROSSING": 2,
-        "PARKING NEAR TRAFFIC LIGHT OR ZEBRA CROSS": 2,
-        "PARKING NEAR BUSTOP/SCHOOL/HOSPITAL ETC": 2,
-        "WRONG PARKING": 1, "NO PARKING": 1
+      "vehicle_adjustment": {
+        "SCOOTER": 0.8,
+        "MOTOR CYCLE": 0.7,
+        "MOPED": 0.7,
+        "PASSENGER AUTO": 0.9,
+        "CAR": 1.0,
+        "MAXI-CAB": 1.0,
+        "VAN": 1.0,
+        "JEEP": 1.0,
+        "SCHOOL VEHICLE": 1.0,
+        "OTHERS": 1.0,
+        "GOODS AUTO": 1.1,
+        "TEMPO": 1.1,
+        "MINI LORRY": 1.1,
+        "LGV": 1.2,
+        "BUS (BMTC/KSRTC)": 1.3,
+        "PRIVATE BUS": 1.3,
+        "TOURIST BUS": 1.3,
+        "HGV": 1.4,
+        "TANKER": 1.4
       }
     },
+    "congestion": {
+      "lane_width": 3.5,
+      "road_width": 7.0,
+      "junction_distance": {
+        "CRITICAL": 10,
+        "HIGH": 30,
+        "MEDIUM": 50
+      },
+      "vehicle_size_mult": {
+        "TANKER": 2.5,
+        "BUS (BMTC/KSRTC)": 2.5,
+        "HGV": 2.5,
+        "PRIVATE BUS": 2.5,
+        "TOURIST BUS": 2.5,
+        "LGV": 2.2,
+        "MINI LORRY": 2.2,
+        "CAR": 1.8,
+        "VAN": 1.8,
+        "MAXI-CAB": 1.8,
+        "JEEP": 1.8,
+        "TEMPO": 1.8,
+        "GOODS AUTO": 1.8,
+        "PASSENGER AUTO": 1.0,
+        "SCOOTER": 1.0,
+        "MOTOR CYCLE": 1.0,
+        "MOPED": 1.0,
+        "SCHOOL VEHICLE": 1.0,
+        "OTHERS": 1.0
+      },
+      "vehicle_width": {
+        "SCOOTER": 0.8,
+        "MOTOR CYCLE": 0.7,
+        "MOPED": 0.6,
+        "PASSENGER AUTO": 1.5,
+        "CAR": 1.8,
+        "MAXI-CAB": 1.8,
+        "VAN": 1.8,
+        "JEEP": 2.0,
+        "GOODS AUTO": 1.8,
+        "TEMPO": 2.0,
+        "LGV": 2.2,
+        "MINI LORRY": 2.2,
+        "BUS (BMTC/KSRTC)": 2.5,
+        "HGV": 2.5,
+        "TANKER": 2.5,
+        "PRIVATE BUS": 2.5,
+        "TOURIST BUS": 2.5,
+        "SCHOOL VEHICLE": 2.0,
+        "OTHERS": 1.8
+      }
+    },
+    "severity_map": {
+      "DOUBLE PARKING": 3,
+      "PARKING IN A MAIN ROAD": 3,
+      "PARKING ON FOOTPATH": 2,
+      "PARKING NEAR ROAD CROSSING": 2,
+      "PARKING NEAR TRAFFIC LIGHT OR ZEBRA CROSS": 2,
+      "PARKING NEAR BUSTOP/SCHOOL/HOSPITAL ETC": 2,
+      "WRONG PARKING": 1,
+      "NO PARKING": 1
+    }
+  },
   "cascades": {
     "adjacency_max_distance_m": 3000,
     "lag_windows": [5, 15, 30, 60],
     "correlation_threshold": 0.2,
     "min_violations_for_test": 5,
     "min_common_bins": 10
-  },
-  "validation": {
-    "temporal_split": {
-      "train_months": [11, 12, 1],
-      "test_month": 2
-    },
-    "spatial_cv": {
-      "leave_one_junction_out": true,
-      "min_junctions_for_test": 5
-    }
-  },
-  "curbflex": {
-    "weekly_threshold": 50,
-    "repeat_offenders_min_violations": 3,
-    "high_impact_tiers": ["CRITICAL", "HIGH"]
   },
   "validation": {
     "weeks_in_dataset": 20,
@@ -110,10 +135,23 @@
     "pilot_target_junction": "BTP148 - 17th Main, Doopanahalli Bus Stop",
     "pilot_duration_weeks": 2,
     "pilot_effectiveness_threshold": 0.3,
+    "temporal_split": {
+      "train_months": [11, 12, 1],
+      "test_month": 2
+    },
+    "spatial_cv": {
+      "leave_one_junction_out": true,
+      "min_junctions_for_test": 5
+    },
     "cross_validation": {
       "n_folds": 5,
       "min_junctions_per_fold": 3
     }
+  },
+  "curbflex": {
+    "weekly_threshold": 50,
+    "repeat_offenders_min_violations": 3,
+    "high_impact_tiers": ["CRITICAL", "HIGH"]
   },
   "enhanced_cascade": {
     "max_lag_minutes": 120,
@@ -121,11 +159,6 @@
     "correlation_threshold": 0.2,
     "min_violations": 5,
     "min_common_bins": 10
-  },
-  "curbflex": {
-    "weekly_threshold": 50,
-    "repeat_offenders_min_violations": 3,
-    "high_impact_tiers": ["CRITICAL", "HIGH"]
   },
   "pilot": {
     "target_junction": "BTP148 - 17th Main, Doopanahalli Bus Stop",
