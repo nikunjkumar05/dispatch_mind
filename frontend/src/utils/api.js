@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect } from 'react'
 
 const API_BASE = '/api'
 const CACHE_TTL = 5 * 60 * 1000 // 5 minutes
@@ -27,13 +27,14 @@ export function useApi(endpoint, deps = []) {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
+  const [refreshKey, setRefreshKey] = useState(0)
   const cacheKey = getCacheKey(endpoint)
 
   useEffect(() => {
     let cancelled = false
 
     const cached = getCacheEntry(cacheKey)
-    if (cached) {
+    if (cached && refreshKey === 0) {
       setData(cached)
       setLoading(false)
       return () => { cancelled = true }
@@ -62,9 +63,14 @@ export function useApi(endpoint, deps = []) {
       })
 
     return () => { cancelled = true }
-  }, deps)
+  }, [...deps, refreshKey])
 
-  return { data, loading, error }
+  const refetch = () => {
+    cache.delete(cacheKey)
+    setRefreshKey(k => k + 1)
+  }
+
+  return { data, loading, error, refetch }
 }
 
 export function formatNumber(n) {
@@ -81,10 +87,20 @@ export function formatDelay(minutes) {
 
 export function tierColor(tier) {
   const colors = {
-    CRITICAL: '#DC2626',
-    HIGH: '#EA580C',
-    MEDIUM: '#D97706',
-    LOW: '#059669',
+    CRITICAL: '#EF4444',
+    HIGH: '#F97316',
+    MEDIUM: '#EAB308',
+    LOW: '#22C55E',
   }
   return colors[tier] || '#6B7280'
+}
+
+export function tierGlow(tier) {
+  const glows = {
+    CRITICAL: '0 0 20px rgba(239, 68, 68, 0.15)',
+    HIGH: '0 0 20px rgba(249, 115, 22, 0.15)',
+    MEDIUM: '0 0 20px rgba(234, 179, 8, 0.15)',
+    LOW: '0 0 20px rgba(34, 197, 94, 0.15)',
+  }
+  return glows[tier] || 'none'
 }

@@ -27,8 +27,7 @@ from src.prediction import run_prediction
 from src.cascade import run_cascade_analysis
 from src.curbflex import run_curbflex
 from src.dispatch import run_dispatch
-from src.validation import run_validation
-from src.realtime_alerts import ViolationAlertSystem, batch_process_violations
+from src.realtime_alerts import ViolationAlertSystem
 
 logger = logging.getLogger("dispatchmind")
 
@@ -471,6 +470,7 @@ async def get_curbflex():
 @app.get("/api/dispatch")
 async def get_dispatch(num_trucks: int = 2):
     """Tow truck shift plan with VRP routing."""
+    num_trucks = max(1, min(num_trucks, 4))
     if _pipeline_data is None or _junction_coords is None:
         raise HTTPException(503, "Pipeline not loaded")
 
@@ -582,6 +582,77 @@ async def get_pareto():
     return {
         "junctions": j_stats.head(30).to_dict('records'),
         "total_delay": round(total_delay, 1),
+    }
+
+
+@app.get("/api/simulator")
+async def get_simulator(
+    top_n: int = 10,
+    filter_station: str = None,
+    filter_tier: str = None,
+):
+    """What-if simulator: clearing top N violations and its impact on congestion."""
+    if _pipeline_data is None:
+        raise HTTPException(503, "Pipeline not loaded")
+
+    df = _pipeline_data.copy()
+
+    # Apply filters
+    if filter_station and filter_station != "ALL":
+        df = df[df['police_station'] == filter_station]
+    if filter_tier and filter_tier != "ALL":
+        df = df[df['impact_tier'] == filter_tier]
+
+    total_cost = df['congestion_cost'].sum()
+    total_violations = len(df)
+
+    if total_cost == 0:
+        return {"scenarios": [], "baseline": {"cost": 0, "violations": 0}}
+
+    # Baseline stats
+    baseline = {
+        "cost": round(total_cost, 1),
+        "violations": total_violations,
+        "junctions": int(df['mapped_junction'].nunique()),
+        "stations": int(df['police_station'].nunique()),
+    }
+
+    # Generate scenarios: clear top 1, 5, 10, 15, 20 violations
+    scenarios = []
+    sorted_df = df.sort_values('congestion_cost', ascending=False)
+
+    for n in [1, 5, 10, 15, 20]:
+        if n > len(sorted_df):
+            break
+
+        cleared = sorted_df.head(n)
+        remaining_cost = total_cost - cleared['congestion_cost'].sum()
+        pct_reduction = (cleared['congestion_cost'].sum() / total_cost * 100)
+
+        # Tier breakdown of cleared violations
+        tier_impact = cleared['impact_tier'].value_counts().to_dict()
+
+        # Top junction affected
+        top_junction = cleared.groupby('mapped_junction')['congestion_cost'].sum()
+        top_junction_name = top_junction.idxmax() if len(top_junction) > 0 else "N/A"
+        top_junction_pct = (top_junction.max() / total_cost * 100) if len(top_junction) > 0 else 0
+
+        scenarios.append({
+            "clear_count": n,
+            "cleared_cost": round(cleared['congestion_cost'].sum(), 1),
+            "remaining_cost": round(remaining_cost, 1),
+            "pct_reduction": round(pct_reduction, 1),
+            "tier_impact": tier_impact,
+            "top_junction": top_junction_name,
+            "top_junction_pct": round(top_junction_pct, 1),
+            "violations_cleared": n,
+        })
+
+    return {
+        "baseline": baseline,
+        "scenarios": scenarios,
+        "filter_station": filter_station or "ALL",
+        "filter_tier": filter_tier or "ALL",
     }
 
 
