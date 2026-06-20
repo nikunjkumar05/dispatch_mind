@@ -1,0 +1,105 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  body {
+    @apply bg-asphalt text-concrete antialiased;
+  }
+  
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+  
+  ::-webkit-scrollbar-track {
+    @apply bg-stone;
+  }
+  
+  ::-webkit-scrollbar-thumb {
+    @apply bg-khaki rounded;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-stone/50 border border-mist/10 rounded-lg p-4 transition-all duration-200;
+  }
+  
+  .card:hover {
+    @apply border-khaki/30 shadow-lg shadow-khaki/5;
+  }
+  
+  .tier-badge {
+    @apply text-xs font-bold uppercase tracking-wider px-2 py-0.5 rounded;
+  }
+  
+  .tier-badge.CRITICAL {
+    @apply bg-tier-critical/20 text-tier-critical;
+  }
+  
+  .tier-badge.HIGH {
+    @apply bg-tier-high/20 text-tier-high;
+  }
+  
+  .tier-badge.MEDIUM {
+    @apply bg-tier-medium/20 text-tier-medium;
+  }
+  
+  .tier-badge.LOW {
+    @apply bg-tier-low/20 text-tier-low;
+  }
+  
+  .metric-value {
+    @apply font-mono font-semibold text-2xl text-chalk;
+  }
+  
+  .metric-label {
+    @apply text-xs uppercase tracking-wider text-mist/60 font-semibold;
+  }
+  
+  .btn-primary {
+    @apply bg-khaki text-asphalt font-semibold px-4 py-2 rounded-lg 
+           hover:bg-khaki/90 transition-all duration-200 
+           active:scale-95;
+  }
+  
+  .btn-danger {
+    @apply bg-signal-red text-chalk font-semibold px-4 py-2 rounded-lg 
+           hover:bg-signal-red/90 transition-all duration-200 
+           active:scale-95;
+  }
+  
+  .sidebar-link {
+    @apply flex items-center gap-3 px-4 py-3 rounded-lg text-mist/70 
+           hover:bg-khaki/10 hover:text-chalk transition-all duration-200;
+  }
+  
+  .sidebar-link.active {
+    @apply bg-khaki/20 text-khaki border-l-2 border-khaki;
+  }
+  
+  .priority-card {
+    @apply card border-l-4;
+  }
+  
+  .priority-card.critical {
+    @apply border-l-tier-critical;
+  }
+  
+  .priority-card.high {
+    @apply border-l-tier-high;
+  }
+  
+  .priority-card.medium {
+    @apply border-l-tier-medium;
+  }
+  
+  .priority-card.low {
+    @apply border-l-tier-low;
+  }
+  
+  .map-container {
+    @apply rounded-lg overflow-hidden border border-mist/10;
+  }
+}

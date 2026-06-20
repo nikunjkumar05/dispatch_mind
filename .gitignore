@@ -1,8 +1,35 @@
-# Documentation
-docs/ARCHITECTURE.md
+# Environment variables (API keys)
+.env
+.env.local
+.env.*.local
 
-Wait, that doesn't make sense - we shouldn't ignore documentation files that are being added. Let me reconsider.
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+.venv/
+venv/
 
-Since only a documentation file (ARCHITECTURE.md) was added and there are no build artifacts, dependencies, or temporary files in the changes, the .gitignore should remain empty.
+# Node
+node_modules/
+frontend/dist/
 
-(nothing)
+# Data files (too large for git)
+*.csv
+data/raw/
+data/processed/
+outputs/models/*.pkl
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
