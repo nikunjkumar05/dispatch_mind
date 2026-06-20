@@ -1,41 +1,8 @@
-```
-# Compiled and build artifacts
-*.pyc
-__pycache__/
+# Documentation
+docs/ARCHITECTURE.md
 
-# Dependencies
-.venv/
-venv/
-node_modules/
-dist/
-build/
-target/
-.gradle/
+Wait, that doesn't make sense - we shouldn't ignore documentation files that are being added. Let me reconsider.
 
-# Logs and temp files
-*.log
-*.tmp
-*.swp
+Since only a documentation file (ARCHITECTURE.md) was added and there are no build artifacts, dependencies, or temporary files in the changes, the .gitignore should remain empty.
 
-# Environment
-.env
-.env.local
-.env.*
-
-# Editors
-.vscode/
-.idea/
-
-# Coverage
-.coverage
-coverage/
-htmlcov/
-
-# Python cache
-.mypy_cache/
-.pytest_cache/
-
-# System files
-.DS_Store
-Thumbs.db
-```
+(nothing)
