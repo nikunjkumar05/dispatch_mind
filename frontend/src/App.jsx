@@ -2,7 +2,7 @@ import { useState, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
 import { 
   Shield, Map, AlertTriangle, Route as RouteIcon, 
-  Users, BarChart3, Menu, Zap, Sliders
+  Users, BarChart3, Menu, Zap, Target, Activity, Radio
 } from 'lucide-react'
 
 const Overview = lazy(() => import('./pages/Overview'))
@@ -11,18 +11,17 @@ const MapView = lazy(() => import('./pages/MapView'))
 const Cascade = lazy(() => import('./pages/Cascade'))
 const Dispatch = lazy(() => import('./pages/Dispatch'))
 const Alerts = lazy(() => import('./pages/Alerts'))
-const RepeatOffenders = lazy(() => import('./pages/RepeatOffenders'))
-const Simulator = lazy(() => import('./pages/Simulator'))
+const ImpactCalculator = lazy(() => import('./pages/ImpactCalculator'))
+const EarlyWarningPanel = lazy(() => import('./pages/EarlyWarningPanel'))
 
 const NAV_ITEMS = [
-  { path: '/', icon: BarChart3, label: 'Overview' },
-  { path: '/priority', icon: AlertTriangle, label: 'Priority Queue' },
-  { path: '/map', icon: Map, label: 'Map View' },
+  { path: '/', icon: Target, label: 'Impact Dashboard', badge: 'hero' },
+  { path: '/early-warning', icon: Radio, label: 'Early Warning', badge: 'new' },
+  { path: '/priority', icon: AlertTriangle, label: 'Action Plan' },
+  { path: '/dispatch', icon: Shield, label: 'Dispatch Routes' },
+  { path: '/map', icon: Map, label: 'Tactical Map' },
   { path: '/cascade', icon: RouteIcon, label: 'Cascade Proof' },
-  { path: '/dispatch', icon: Shield, label: 'Dispatch Plan' },
-  { path: '/alerts', icon: Zap, label: 'Alerts' },
-  { path: '/offenders', icon: Users, label: 'Repeat Offenders' },
-  { path: '/simulator', icon: Sliders, label: 'What-If Simulator' },
+  { path: '/alerts', icon: Zap, label: 'Live Alerts' },
 ]
 
 function PageLoader() {
@@ -77,17 +76,23 @@ export default function App() {
 
           {/* Navigation */}
           <nav className="px-3 py-3 space-y-0.5">
-            {NAV_ITEMS.map(({ path, icon: Icon, label }) => (
+            {NAV_ITEMS.map(({ path, icon: Icon, label, badge }) => (
               <NavLink
                 key={path}
                 to={path}
                 onClick={() => setSidebarOpen(false)}
                 className={({ isActive }) => `
                   sidebar-link ${isActive ? 'active' : ''}
+                  ${badge === 'hero' ? 'border-l-2 border-signal-emerald' : ''}
                 `}
               >
                 <Icon className="w-4 h-4" />
                 <span className="text-sm">{label}</span>
+                {badge === 'hero' && (
+                  <span className="ml-auto text-[9px] bg-signal-emerald/20 text-signal-emerald px-1.5 py-0.5 rounded font-medium">
+                    LIVE
+                  </span>
+                )}
               </NavLink>
             ))}
           </nav>
@@ -124,14 +129,14 @@ export default function App() {
           <div className="p-4 lg:p-6 max-w-7xl mx-auto">
             <Suspense fallback={<PageLoader />}>
               <Routes>
-                <Route path="/" element={<Overview />} />
+                <Route path="/" element={<ImpactCalculator />} />
+                <Route path="/early-warning" element={<EarlyWarningPanel />} />
+                <Route path="/overview" element={<Overview />} />
                 <Route path="/priority" element={<PriorityQueue role={role} />} />
                 <Route path="/map" element={<MapView />} />
                 <Route path="/cascade" element={<Cascade />} />
                 <Route path="/dispatch" element={<Dispatch />} />
                 <Route path="/alerts" element={<Alerts />} />
-                <Route path="/offenders" element={<RepeatOffenders />} />
-                <Route path="/simulator" element={<Simulator />} />
               </Routes>
             </Suspense>
           </div>
