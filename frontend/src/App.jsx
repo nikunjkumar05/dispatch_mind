@@ -1,9 +1,6 @@
 import { useState, lazy, Suspense } from 'react'
 import { BrowserRouter, Routes, Route, NavLink } from 'react-router-dom'
-import { 
-  Shield, Map, AlertTriangle, Route as RouteIcon, 
-  Users, BarChart3, Menu, Zap, Target, Activity, Radio, FileText
-} from 'lucide-react'
+import { Shield, Map, TriangleAlert as AlertTriangle, Route as RouteIcon, Users, ChartBar as BarChart3, Menu, Zap, Target, Activity, Radio, FileText } from 'lucide-react'
 
 const Overview = lazy(() => import('./pages/Overview'))
 const PriorityQueue = lazy(() => import('./pages/PriorityQueue'))
@@ -17,6 +14,8 @@ const CommandCenter = lazy(() => import('./pages/CommandCenter'))
 const FieldOfficer = lazy(() => import('./pages/FieldOfficer'))
 const InspectorDashboard = lazy(() => import('./pages/InspectorDashboard'))
 const EvidenceView = lazy(() => import('./pages/EvidenceView'))
+const Simulator = lazy(() => import('./pages/Simulator'))
+const RepeatOffenders = lazy(() => import('./pages/RepeatOffenders'))
 
 const NAV_BY_ROLE = {
   constable: [
@@ -38,6 +37,8 @@ const NAV_BY_ROLE = {
     { path: '/', icon: Target, label: 'ClearLane Dashboard', badge: 'hero' },
     { path: '/command', icon: Shield, label: 'Command Center' },
     { path: '/early-warning', icon: Activity, label: 'Early Warning' },
+    { path: '/simulator', icon: Zap, label: 'What-If Simulator' },
+    { path: '/repeat-offenders', icon: Users, label: 'Repeat Offenders' },
     { path: '/priority', icon: AlertTriangle, label: 'Action Plan' },
     { path: '/dispatch', icon: RouteIcon, label: 'Dispatch Routes' },
     { path: '/cascade', icon: BarChart3, label: 'Cascade Analysis' },
@@ -168,6 +169,8 @@ export default function App() {
                 <Route path="/alerts" element={<Alerts />} />
                 <Route path="/overview" element={<Overview />} />
                 <Route path="/early-warning" element={<EarlyWarningPanel />} />
+                <Route path="/simulator" element={<Simulator />} />
+                <Route path="/repeat-offenders" element={<RepeatOffenders />} />
               </Routes>
             </Suspense>
           </div>

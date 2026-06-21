@@ -1,11 +1,40 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useApi } from '../utils/api'
-import { Shield, AlertTriangle, TrendingDown, Users, Zap, Activity, RefreshCw } from 'lucide-react'
+import { Shield, TriangleAlert as AlertTriangle, TrendingDown, Users, Zap, Activity, RefreshCw, Radio, Car, CircleCheck as CheckCircle, Clock, Volume2 } from 'lucide-react'
 import ErrorState from '../components/ErrorState'
 
 export default function CommandCenter() {
   const { data, loading, error, refetch } = useApi('/capacity-status')
   const { data: causalData } = useApi('/causal-impact')
+  const [tickerItems, setTickerItems] = useState([])
+  const [tickerPaused, setTickerPaused] = useState(false)
+
+  // Simulated live operations ticker
+  useEffect(() => {
+    const tickerEvents = [
+      { type: 'cleared', junction: 'BTP044', officer: 'Kumar', vehicles: 3, time: 'Just now' },
+      { type: 'dispatched', junction: 'BTP067', officer: 'Singh', time: '2 min ago' },
+      { type: 'alert', junction: 'BTP089', message: 'Capacity restored to 72%', time: '5 min ago' },
+      { type: 'cleared', junction: 'BTP102', officer: 'Patel', vehicles: 2, time: '8 min ago' },
+      { type: 'predicted', junction: 'BTP148', time: '15 min ago', message: 'Tipping point predicted' },
+    ]
+    setTickerItems(tickerEvents)
+
+    // Simulate new events arriving (in real implementation, this would be Supabase Realtime)
+    const interval = setInterval(() => {
+      if (!tickerPaused) {
+        const newEvents = [
+          { type: 'cleared', junction: `BTP${Math.floor(Math.random() * 200)}`, officer: 'Sharma', vehicles: Math.floor(Math.random() * 5) + 1, time: 'Just now' },
+          { type: 'dispatched', junction: `BTP${Math.floor(Math.random() * 200)}`, officer: 'Verma', time: 'Just now' },
+          { type: 'alert', junction: `BTP${Math.floor(Math.random() * 200)}`, message: 'New violation detected', time: 'Just now' },
+        ]
+        const newItem = newEvents[Math.floor(Math.random() * newEvents.length)]
+        setTickerItems(prev => [newItem, ...prev.slice(0, 9)])
+      }
+    }, 30000) // Every 30 seconds
+
+    return () => clearInterval(interval)
+  }, [tickerPaused])
 
   if (loading) return <PageSkeleton />
   if (error) return <ErrorState message={error} onRetry={refetch} />
@@ -31,6 +60,52 @@ export default function CommandCenter() {
         >
           <RefreshCw className="w-4 h-4" /> Refresh
         </button>
+      </div>
+
+      {/* Live Operations Ticker */}
+      <div className="card border border-accent/20 bg-accent/5 overflow-hidden">
+        <div className="flex items-center justify-between px-4 py-2 border-b border-accent/20 bg-accent/10">
+          <div className="flex items-center gap-2">
+            <Radio className="w-4 h-4 text-accent animate-pulse" />
+            <span className="text-xs font-bold text-accent uppercase tracking-wider">Live Operations</span>
+          </div>
+          <button
+            onClick={() => setTickerPaused(!tickerPaused)}
+            className="text-xs text-muted hover:text-chalk"
+          >
+            {tickerPaused ? 'Resume' : 'Pause'}
+          </button>
+        </div>
+        <div className="max-h-40 overflow-y-auto">
+          {tickerItems.map((item, idx) => (
+            <div
+              key={idx}
+              className="flex items-center gap-3 px-4 py-2 border-b border-white/[0.04] last:border-0 hover:bg-elevated/30 transition-colors"
+            >
+              {item.type === 'cleared' && (
+                <CheckCircle className="w-4 h-4 text-signal-emerald shrink-0" />
+              )}
+              {item.type === 'dispatched' && (
+                <Car className="w-4 h-4 text-accent shrink-0" />
+              )}
+              {item.type === 'alert' && (
+                <AlertTriangle className="w-4 h-4 text-signal-amber shrink-0" />
+              )}
+              {item.type === 'predicted' && (
+                <Zap className="w-4 h-4 text-signal-red shrink-0" />
+              )}
+              <div className="flex-1 min-w-0">
+                <p className="text-xs text-chalk truncate">
+                  {item.type === 'cleared' && `${item.junction} cleared — ${item.vehicles} vehicles towed by ${item.officer}`}
+                  {item.type === 'dispatched' && `${item.officer} dispatched to ${item.junction}`}
+                  {item.type === 'alert' && `${item.junction}: ${item.message}`}
+                  {item.type === 'predicted' && `${item.junction}: ${item.message}`}
+                </p>
+              </div>
+              <span className="text-[10px] text-muted shrink-0">{item.time}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* City Capacity Banner */}

@@ -1,339 +1,302 @@
-import React, { useState } from 'react';
-import { 
-  FileText, Search, Clock, AlertCircle, CheckCircle, XCircle,
-  BarChart2, Users, MapPin, Calendar, Filter, Download,
-  Eye, Edit, Trash2, ChevronRight, Bell, Menu, Shield
-} from 'lucide-react';
-import StatCard from '../components/StatCard';
-import TierBadge from '../components/TierBadge';
+import { useState, useEffect } from 'react';
+import { FileText, Clock, CircleAlert as AlertCircle, CircleCheck as CheckCircle, Circle as XCircle, ChartBar as BarChart2, Users, MapPin, RefreshCw, Eye, ChevronRight, TriangleAlert as AlertTriangle, Car, Truck, Volume2, Zap, TrendingUp } from 'lucide-react';
 
-const InspectorDashboard = () => {
-  const [sidebarOpen, setSidebarOpen] = useState(true);
-  const [activeTab, setActiveTab] = useState('cases');
+export default function InspectorDashboard() {
+  const [priorityQueue, setPriorityQueue] = useState(null)
+  const [repeatOffenders, setRepeatOffenders] = useState(null)
+  const [loading, setLoading] = useState(true)
+  const [activeTab, setActiveTab] = useState('escalations')
 
-  const stats = [
-    { title: 'Active Cases', value: '28', change: '+4', icon: FileText, color: 'blue' },
-    { title: 'Pending Review', value: '12', change: '-2', icon: Clock, color: 'orange' },
-    { title: 'Resolved Today', value: '7', change: '+3', icon: CheckCircle, color: 'green' },
-    { title: 'Team Members', value: '18', change: '0', icon: Users, color: 'purple' },
-  ];
+  useEffect(() => {
+    Promise.all([
+      fetch('/api/priority-queue/ALL?top_n=10').then(r => r.json()).catch(() => null),
+      fetch('/api/repeat-offenders?min_violations=3').then(r => r.json()).catch(() => null),
+    ]).then(([pq, ro]) => {
+      setPriorityQueue(pq)
+      setRepeatOffenders(ro)
+      setLoading(false)
+    })
+  }, [])
 
-  const cases = [
-    { id: 'CR-2024-001', type: 'Theft', location: 'Central Market', status: 'investigating', priority: 'high', assigned: 'Officer Kumar', date: '2 hrs ago' },
-    { id: 'CR-2024-002', type: 'Assault', location: 'Park Street', status: 'pending', priority: 'critical', assigned: 'Officer Singh', date: '4 hrs ago' },
-    { id: 'CR-2024-003', type: 'Fraud', location: 'Business District', status: 'review', priority: 'medium', assigned: 'Officer Patel', date: '6 hrs ago' },
-    { id: 'CR-2024-004', type: 'Vandalism', location: 'School Zone', status: 'resolved', priority: 'low', assigned: 'Officer Sharma', date: '1 day ago' },
-    { id: 'CR-2024-005', type: 'Burglary', location: 'Residential Area', status: 'investigating', priority: 'high', assigned: 'Officer Verma', date: '1 day ago' },
-  ];
+  if (loading) {
+    return (
+      <div className="p-6 space-y-6">
+        <div className="h-32 bg-elevated rounded-xl animate-pulse" />
+        <div className="grid grid-cols-3 gap-4">
+          {[1,2,3].map(i => <div key={i} className="h-64 bg-elevated rounded-xl animate-pulse" />)}
+        </div>
+      </div>
+    )
+  }
 
-  const teamMembers = [
-    { name: 'Officer Rajesh Kumar', status: 'active', cases: 5, location: 'North Sector' },
-    { name: 'Officer Priya Singh', status: 'on-call', cases: 3, location: 'Central Sector' },
-    { name: 'Officer Amit Patel', status: 'active', cases: 4, location: 'East Sector' },
-    { name: 'Officer Neha Sharma', status: 'off-duty', cases: 0, location: 'Station' },
-  ];
+  const cards = priorityQueue?.cards || []
+  const offenders = repeatOffenders?.offenders || []
 
-  const getStatusColor = (status) => {
-    switch(status) {
-      case 'investigating': return 'bg-blue-500/20 text-blue-400 border-blue-500/30';
-      case 'pending': return 'bg-orange-500/20 text-orange-400 border-orange-500/30';
-      case 'review': return 'bg-purple-500/20 text-purple-400 border-purple-500/30';
-      case 'resolved': return 'bg-green-500/20 text-green-400 border-green-500/30';
-      default: return 'bg-gray-500/20 text-gray-400 border-gray-500/30';
-    }
-  };
-
-  const getPriorityColor = (priority) => {
-    switch(priority) {
-      case 'critical': return 'bg-red-500 text-white';
-      case 'high': return 'bg-orange-500 text-white';
-      case 'medium': return 'bg-yellow-500 text-black';
-      case 'low': return 'bg-blue-500 text-white';
-      default: return 'bg-gray-500 text-white';
-    }
-  };
+  const escalations = cards.filter(c => c.tier === 'CRITICAL' || c.tier === 'HIGH')
+  const pendingReview = cards.filter(c => c.tier === 'MEDIUM')
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-900 via-blue-900 to-slate-900">
+    <div className="space-y-6">
       {/* Header */}
-      <header className="bg-white/10 backdrop-blur-md border-b border-white/20 sticky top-0 z-50">
-        <div className="px-6 py-4 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <button 
-              onClick={() => setSidebarOpen(!sidebarOpen)}
-              className="p-2 hover:bg-white/10 rounded-lg transition-colors"
-            >
-              <Menu className="w-6 h-6 text-white" />
-            </button>
-            <div>
-              <h1 className="text-2xl font-bold text-white">Inspector Dashboard</h1>
-              <p className="text-blue-200 text-sm">Case Management & Team Oversight</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-4">
-            <div className="relative">
-              <Search className="w-5 h-5 absolute left-3 top-1/2 -translate-y-1/2 text-blue-300" />
-              <input 
-                type="text" 
-                placeholder="Search cases, officers..." 
-                className="pl-10 pr-4 py-2 bg-white/10 border border-white/20 rounded-lg text-white placeholder-blue-300 focus:outline-none focus:ring-2 focus:ring-blue-500 w-64"
-              />
-            </div>
-            <button className="relative p-2 hover:bg-white/10 rounded-lg transition-colors">
-              <Bell className="w-6 h-6 text-white" />
-              <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full"></span>
-            </button>
-            <div className="flex items-center gap-3 pl-4 border-l border-white/20">
-              <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-full flex items-center justify-center">
-                <Shield className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <p className="text-white font-semibold">Inspector Gupta</p>
-                <p className="text-blue-300 text-sm">Station House Officer</p>
-              </div>
-            </div>
-          </div>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-chalk flex items-center gap-2">
+            <Users className="w-6 h-6 text-accent" />
+            SI Inspector Dashboard
+          </h1>
+          <p className="text-muted text-sm mt-1">
+            Escalation queue, evidence approval, and repeat offenders
+          </p>
         </div>
-      </header>
+        <button
+          onClick={() => window.location.reload()}
+          className="flex items-center gap-2 px-3 py-1.5 bg-elevated border border-white/[0.08] rounded-lg text-sm text-muted hover:text-chalk transition-all"
+        >
+          <RefreshCw className="w-3.5 h-3.5" />
+          Refresh
+        </button>
+      </div>
 
-      <div className="flex">
-        {/* Sidebar */}
-        {sidebarOpen && (
-          <aside className="w-64 bg-black/20 backdrop-blur-md min-h-[calc(100vh-80px)] border-r border-white/10 p-6">
-            <nav className="space-y-2">
-              {[
-                { icon: FileText, label: 'Case Management', active: true },
-                { icon: Users, label: 'Team Overview' },
-                { icon: MapPin, label: 'Patrol Routes' },
-                { icon: BarChart2, label: 'Performance Reports' },
-                { icon: Calendar, label: 'Duty Roster' },
-                { icon: AlertCircle, label: 'Urgent Reviews' },
-                { icon: Download, label: 'Export Data' },
-              ].map((item, idx) => (
-                <button
-                  key={idx}
-                  className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg transition-all ${
-                    item.active 
-                      ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white shadow-lg shadow-blue-500/30' 
-                      : 'text-blue-200 hover:bg-white/10'
-                  }`}
-                >
-                  <item.icon className="w-5 h-5" />
-                  <span>{item.label}</span>
-                  {item.active && <ChevronRight className="w-4 h-4 ml-auto" />}
-                </button>
-              ))}
-            </nav>
+      {/* Stats Bar */}
+      <div className="grid grid-cols-4 gap-3">
+        <div className="p-4 rounded-xl bg-signal-red/10 border border-signal-red/20">
+          <p className="text-xs text-signal-red font-bold uppercase tracking-wider">Escalations</p>
+          <p className="text-2xl font-bold text-chalk mt-1">{escalations.length}</p>
+        </div>
+        <div className="p-4 rounded-xl bg-signal-amber/10 border border-signal-amber/20">
+          <p className="text-xs text-signal-amber font-bold uppercase tracking-wider">Pending Review</p>
+          <p className="text-2xl font-bold text-chalk mt-1">{pendingReview.length}</p>
+        </div>
+        <div className="p-4 rounded-xl bg-elevated border border-white/[0.06]">
+          <p className="text-xs text-muted font-bold uppercase tracking-wider">Repeat Offenders</p>
+          <p className="text-2xl font-bold text-chalk mt-1">{offenders.length}</p>
+        </div>
+        <div className="p-4 rounded-xl bg-signal-emerald/10 border border-signal-emerald/20">
+          <p className="text-xs text-signal-emerald font-bold uppercase tracking-wider">Evidence Approved</p>
+          <p className="text-2xl font-bold text-chalk mt-1">23</p>
+        </div>
+      </div>
 
-            <div className="mt-8 pt-8 border-t border-white/10">
-              <h3 className="text-blue-300 text-sm font-semibold mb-4">Filters</h3>
-              <div className="space-y-2">
-                <button className="w-full flex items-center justify-between px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg transition-all">
-                  <span>All Cases</span>
-                  <Filter className="w-4 h-4" />
-                </button>
-                <button className="w-full flex items-center justify-between px-4 py-2 text-blue-200 hover:bg-white/10 rounded-lg transition-all">
-                  <span>High Priority</span>
-                  <span className="bg-red-500/20 text-red-400 px-2 py-0.5 rounded text-xs">5</span>
-                </button>
-                <button className="w-full flex items-center justify-between px-4 py-2 text-blue-200 hover:bg-white/10 rounded-lg transition-all">
-                  <span>Pending Review</span>
-                  <span className="bg-orange-500/20 text-orange-400 px-2 py-0.5 rounded text-xs">12</span>
-                </button>
-              </div>
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-white/[0.06] pb-2">
+        {[
+          { key: 'escalations', label: 'Escalation Queue', icon: AlertTriangle },
+          { key: 'evidence', label: 'Evidence Approval', icon: FileText },
+          { key: 'offenders', label: 'Repeat Offenders', icon: Car },
+          { key: 'performance', label: 'Officer Performance', icon: TrendingUp },
+        ].map((tab) => (
+          <button
+            key={tab.key}
+            onClick={() => setActiveTab(tab.key)}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === tab.key
+                ? 'bg-accent/10 text-accent border border-accent/20'
+                : 'text-muted hover:text-chalk hover:bg-elevated/50'
+            }`}
+          >
+            <tab.icon className="w-4 h-4" />
+            {tab.label}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab Content */}
+      {activeTab === 'escalations' && (
+        <div className="space-y-3">
+          {escalations.length === 0 ? (
+            <div className="card border border-white/[0.06] text-center py-12">
+              <CheckCircle className="w-10 h-10 text-signal-emerald mx-auto mb-3" />
+              <p className="text-chalk font-medium">No escalations pending</p>
+              <p className="text-sm text-muted mt-1">All critical violations addressed</p>
             </div>
-          </aside>
-        )}
-
-        {/* Main Content */}
-        <main className="flex-1 p-6">
-          {/* Stats Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            {stats.map((stat, idx) => (
-              <StatCard
+          ) : (
+            escalations.map((card, idx) => (
+              <div
                 key={idx}
-                title={stat.title}
-                value={stat.value}
-                change={stat.change}
-                icon={stat.icon}
-                color={stat.color}
-                gradient="dark"
-              />
-            ))}
-          </div>
-
-          {/* Tabs */}
-          <div className="flex gap-4 mb-6 border-b border-white/10 pb-2">
-            <button 
-              onClick={() => setActiveTab('cases')}
-              className={`px-6 py-2 rounded-lg font-medium transition-all ${
-                activeTab === 'cases' 
-                  ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white' 
-                  : 'text-blue-200 hover:bg-white/10'
-              }`}
-            >
-              Active Cases
-            </button>
-            <button 
-              onClick={() => setActiveTab('team')}
-              className={`px-6 py-2 rounded-lg font-medium transition-all ${
-                activeTab === 'team' 
-                  ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white' 
-                  : 'text-blue-200 hover:bg-white/10'
-              }`}
-            >
-              Team Overview
-            </button>
-            <button 
-              onClick={() => setActiveTab('analytics')}
-              className={`px-6 py-2 rounded-lg font-medium transition-all ${
-                activeTab === 'analytics' 
-                  ? 'bg-gradient-to-r from-blue-600 to-cyan-600 text-white' 
-                  : 'text-blue-200 hover:bg-white/10'
-              }`}
-            >
-              Analytics
-            </button>
-          </div>
-
-          {/* Cases Tab */}
-          {activeTab === 'cases' && (
-            <div className="bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 overflow-hidden">
-              <div className="p-6 border-b border-white/10 flex items-center justify-between">
-                <h2 className="text-xl font-bold text-white">Case Register</h2>
-                <button className="bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-700 hover:to-cyan-700 text-white px-4 py-2 rounded-lg font-medium transition-all flex items-center gap-2">
-                  <FileText className="w-4 h-4" />
-                  New Case
-                </button>
-              </div>
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead className="bg-white/5">
-                    <tr>
-                      <th className="px-6 py-4 text-left text-blue-300 font-semibold text-sm">Case ID</th>
-                      <th className="px-6 py-4 text-left text-blue-300 font-semibold text-sm">Type</th>
-                      <th className="px-6 py-4 text-left text-blue-300 font-semibold text-sm">Location</th>
-                      <th className="px-6 py-4 text-left text-blue-300 font-semibold text-sm">Priority</th>
-                      <th className="px-6 py-4 text-left text-blue-300 font-semibold text-sm">Status</th>
-                      <th className="px-6 py-4 text-left text-blue-300 font-semibold text-sm">Assigned To</th>
-                      <th className="px-6 py-4 text-left text-blue-300 font-semibold text-sm">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {cases.map((caseItem, idx) => (
-                      <tr key={idx} className="border-t border-white/10 hover:bg-white/5 transition-colors">
-                        <td className="px-6 py-4 text-white font-mono text-sm">{caseItem.id}</td>
-                        <td className="px-6 py-4 text-white">{caseItem.type}</td>
-                        <td className="px-6 py-4 text-blue-200">{caseItem.location}</td>
-                        <td className="px-6 py-4">
-                          <span className={`${getPriorityColor(caseItem.priority)} px-3 py-1 rounded-full text-xs font-semibold`}>
-                            {caseItem.priority.toUpperCase()}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4">
-                          <span className={`${getStatusColor(caseItem.status)} px-3 py-1 rounded-full text-xs font-semibold border`}>
-                            {caseItem.status.charAt(0).toUpperCase() + caseItem.status.slice(1)}
-                          </span>
-                        </td>
-                        <td className="px-6 py-4 text-blue-200">{caseItem.assigned}</td>
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-2">
-                            <button className="p-2 hover:bg-white/10 rounded-lg transition-colors text-blue-300 hover:text-white">
-                              <Eye className="w-4 h-4" />
-                            </button>
-                            <button className="p-2 hover:bg-white/10 rounded-lg transition-colors text-blue-300 hover:text-white">
-                              <Edit className="w-4 h-4" />
-                            </button>
-                            <button className="p-2 hover:bg-red-500/20 rounded-lg transition-colors text-red-400 hover:text-red-300">
-                              <Trash2 className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-
-          {/* Team Tab */}
-          {activeTab === 'team' && (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {teamMembers.map((member, idx) => (
-                <div key={idx} className="bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 p-6 hover:bg-white/15 transition-all">
-                  <div className="flex items-start justify-between mb-4">
-                    <div className="flex items-center gap-3">
-                      <div className={`w-12 h-12 rounded-full flex items-center justify-center ${
-                        member.status === 'active' ? 'bg-gradient-to-br from-green-500 to-emerald-500' :
-                        member.status === 'on-call' ? 'bg-gradient-to-br from-orange-500 to-yellow-500' :
-                        'bg-gradient-to-br from-gray-500 to-slate-500'
-                      }`}>
-                        <Users className="w-6 h-6 text-white" />
-                      </div>
-                      <div>
-                        <h3 className="text-white font-semibold">{member.name}</h3>
-                        <p className="text-blue-300 text-sm">{member.location}</p>
-                      </div>
-                    </div>
-                    <TierBadge tier={member.status.toUpperCase()} />
+                className="card border border-white/[0.06] hover:border-signal-red/20 transition-colors"
+              >
+                <div className="flex items-center gap-4">
+                  {/* Rank */}
+                  <div className={`w-12 h-12 rounded-lg flex items-center justify-center shrink-0 ${
+                    card.tier === 'CRITICAL' ? 'bg-signal-red/20' : 'bg-tier-high/20'
+                  }`}>
+                    <span className={`font-mono text-xl font-bold ${
+                      card.tier === 'CRITICAL' ? 'text-signal-red' : 'text-tier-high'
+                    }`}>
+                      {card.rank}
+                    </span>
                   </div>
-                  <div className="flex items-center justify-between pt-4 border-t border-white/10">
-                    <div>
-                      <p className="text-blue-300 text-xs mb-1">Active Cases</p>
-                      <p className="text-white text-xl font-bold">{member.cases}</p>
+
+                  {/* Details */}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-1">
+                      <MapPin className="w-3.5 h-3.5 text-muted" />
+                      <span className="text-sm font-medium text-chalk">{card.junction}</span>
+                      <span className="px-2 py-0.5 text-[10px] font-bold rounded bg-signal-red/10 text-signal-red">
+                        {card.tier}
+                      </span>
                     </div>
-                    <button className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition-all">
-                      View Details
+                    <p className="text-xs text-muted truncate">{card.explanation}</p>
+                  </div>
+
+                  {/* Metrics */}
+                  <div className="flex items-center gap-6 shrink-0">
+                    <div className="text-right">
+                      <p className="text-xs text-muted">Total Delay</p>
+                      <p className="font-mono text-lg font-bold text-chalk">{card.total_delay}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-xs text-muted">Violations</p>
+                      <p className="font-mono text-lg font-bold text-chalk">{card.violation_count}</p>
+                    </div>
+                    <button className="flex items-center gap-2 px-4 py-2 bg-accent text-white rounded-lg text-sm font-medium hover:bg-accent/80 transition-colors">
+                      <Eye className="w-4 h-4" />
+                      Review
                     </button>
                   </div>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))
           )}
+        </div>
+      )}
 
-          {/* Analytics Tab */}
-          {activeTab === 'analytics' && (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-              <div className="bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 p-6">
-                <h3 className="text-white font-bold mb-4">Case Resolution Rate</h3>
-                <div className="h-64 flex items-center justify-center">
-                  <div className="text-center">
-                    <div className="text-5xl font-bold text-green-400 mb-2">78%</div>
-                    <p className="text-blue-200">Average resolution rate this month</p>
+      {activeTab === 'evidence' && (
+        <div className="card border border-white/[0.06]">
+          <div className="p-6 border-b border-white/[0.06]">
+            <h3 className="text-sm font-bold text-chalk">Evidence Packets Pending Approval</h3>
+            <p className="text-xs text-muted mt-1">Court-ready challans with SHA256 hash verification</p>
+          </div>
+
+          <div className="p-6">
+            <div className="space-y-3">
+              {[
+                { id: 'CL-2024-001', junction: 'BTP044', vehicle: 'KA-01-AB-1234', status: 'pending', time: '2 hrs ago' },
+                { id: 'CL-2024-002', junction: 'BTP067', vehicle: 'KA-02-CD-5678', status: 'pending', time: '3 hrs ago' },
+                { id: 'CL-2024-003', junction: 'BTP089', vehicle: 'KA-03-EF-9012', status: 'approved', time: '5 hrs ago' },
+              ].map((evidence, idx) => (
+                <div key={idx} className="flex items-center justify-between p-4 rounded-lg bg-elevated/30 border border-white/[0.04] hover:border-accent/20 transition-colors">
+                  <div className="flex items-center gap-4">
+                    <FileText className="w-5 h-5 text-accent" />
+                    <div>
+                      <p className="text-sm font-medium text-chalk">{evidence.id} — {evidence.junction}</p>
+                      <p className="text-xs text-muted">{evidence.vehicle} • {evidence.time}</p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    {evidence.status === 'pending' ? (
+                      <>
+                        <button className="px-3 py-1.5 bg-signal-emerald text-white text-xs font-bold rounded hover:bg-signal-emerald/80 transition-colors">
+                          Approve
+                        </button>
+                        <button className="px-3 py-1.5 bg-signal-red text-white text-xs font-bold rounded hover:bg-signal-red/80 transition-colors">
+                          Reject
+                        </button>
+                      </>
+                    ) : (
+                      <span className="px-2 py-1 bg-signal-emerald/10 text-signal-emerald text-xs font-bold rounded">
+                        APPROVED
+                      </span>
+                    )}
                   </div>
                 </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'offenders' && (
+        <div className="card border border-white/[0.06]">
+          <div className="p-6 border-b border-white/[0.06]">
+            <h3 className="text-sm font-bold text-chalk">Repeat Offenders</h3>
+            <p className="text-xs text-muted mt-1">
+              Vehicles with 3+ high-impact violations — {offenders.length} identified
+            </p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead className="bg-elevated/50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs text-muted font-bold uppercase tracking-wider">Vehicle</th>
+                  <th className="px-4 py-3 text-left text-xs text-muted font-bold uppercase tracking-wider">Violations</th>
+                  <th className="px-4 py-3 text-left text-xs text-muted font-bold uppercase tracking-wider">Stations</th>
+                  <th className="px-4 py-3 text-left text-xs text-muted font-bold uppercase tracking-wider">Total Delay</th>
+                  <th className="px-4 py-3 text-left text-xs text-muted font-bold uppercase tracking-wider">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {offenders.slice(0, 10).map((offender, idx) => (
+                  <tr key={idx} className="border-t border-white/[0.04] hover:bg-elevated/30 transition-colors">
+                    <td className="px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <Car className="w-4 h-4 text-muted" />
+                        <span className="text-sm font-medium text-chalk">{offender.vehicle_number || 'N/A'}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="px-2 py-1 bg-signal-red/10 text-signal-red text-xs font-bold rounded">
+                        {offender.violation_count}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-sm text-muted">{offender.stations}</td>
+                    <td className="px-4 py-3 font-mono text-sm text-chalk">{offender.total_delay?.toFixed(1)}</td>
+                    <td className="px-4 py-3">
+                      <button className="p-2 hover:bg-accent/10 rounded-lg transition-colors text-accent">
+                        <Eye className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {activeTab === 'performance' && (
+        <div className="grid grid-cols-2 gap-4">
+          {[
+            { name: 'Officer Kumar', cleared: 23, avg_response: '4.2 min', rating: 'Excellent' },
+            { name: 'Officer Singh', cleared: 18, avg_response: '5.1 min', rating: 'Good' },
+            { name: 'Officer Patel', cleared: 15, avg_response: '6.3 min', rating: 'Good' },
+            { name: 'Officer Sharma', cleared: 12, avg_response: '7.2 min', rating: 'Average' },
+          ].map((officer, idx) => (
+            <div key={idx} className="card border border-white/[0.06]">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-accent/20 flex items-center justify-center">
+                    <Users className="w-5 h-5 text-accent" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-medium text-chalk">{officer.name}</p>
+                    <p className="text-xs text-muted">{officer.rating}</p>
+                  </div>
+                </div>
+                <span className={`px-2 py-1 text-[10px] font-bold rounded ${
+                  officer.rating === 'Excellent' ? 'bg-signal-emerald/10 text-signal-emerald' :
+                  officer.rating === 'Good' ? 'bg-signal-amber/10 text-signal-amber' :
+                  'bg-elevated text-muted'
+                }`}>
+                  {officer.rating.toUpperCase()}
+                </span>
               </div>
-              <div className="bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 p-6">
-                <h3 className="text-white font-bold mb-4">Cases by Type</h3>
-                <div className="space-y-4">
-                  {[
-                    { type: 'Theft', count: 12, percentage: 35 },
-                    { type: 'Assault', count: 8, percentage: 23 },
-                    { type: 'Fraud', count: 6, percentage: 17 },
-                    { type: 'Others', count: 8, percentage: 25 },
-                  ].map((item, idx) => (
-                    <div key={idx}>
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-blue-200">{item.type}</span>
-                        <span className="text-white font-semibold">{item.count}</span>
-                      </div>
-                      <div className="bg-white/10 rounded-full h-2 overflow-hidden">
-                        <div 
-                          className="bg-gradient-to-r from-blue-500 to-cyan-500 h-full rounded-full"
-                          style={{ width: `${item.percentage}%` }}
-                        ></div>
-                      </div>
-                    </div>
-                  ))}
+
+              <div className="grid grid-cols-2 gap-3">
+                <div className="p-3 rounded-lg bg-elevated/30">
+                  <p className="text-xs text-muted">Vehicles Cleared</p>
+                  <p className="text-lg font-bold text-chalk">{officer.cleared}</p>
+                </div>
+                <div className="p-3 rounded-lg bg-elevated/30">
+                  <p className="text-xs text-muted">Avg Response</p>
+                  <p className="text-lg font-bold text-chalk">{officer.avg_response}</p>
                 </div>
               </div>
             </div>
-          )}
-        </main>
-      </div>
+          ))}
+        </div>
+      )}
     </div>
-  );
-};
-
-export default InspectorDashboard;
+  )
+}

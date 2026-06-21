@@ -1,11 +1,43 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useApi } from '../utils/api'
-import { MapPin, Truck, CheckCircle, AlertTriangle, Navigation, ExternalLink } from 'lucide-react'
+import { MapPin, Truck, CircleCheck as CheckCircle, TriangleAlert as AlertTriangle, Navigation, ExternalLink, Volume2, VolumeX } from 'lucide-react'
 import ErrorState from '../components/ErrorState'
 
 export default function FieldOfficer() {
   const [selectedViolation, setSelectedViolation] = useState(null)
+  const [voiceEnabled, setVoiceEnabled] = useState(false)
+  const [lastSpoken, setLastSpoken] = useState(null)
   const { data, loading, error, refetch } = useApi('/priority-queue/ALL?top_n=5')
+
+  // Voice alert for top violation
+  useEffect(() => {
+    if (!voiceEnabled || !data?.cards?.length) return
+
+    const topCard = data.cards[0]
+    const message = `Attention. Priority ${topCard.tier}. ${topCard.junction}. ${topCard.violation_count} violations. ${topCard.total_delay} vehicle minutes delay. Top vehicle type: ${topCard.top_vehicle}.`
+
+    // Only speak if different from last message
+    if (lastSpoken !== message) {
+      speakAlert(message)
+      setLastSpoken(message)
+    }
+  }, [data, voiceEnabled, lastSpoken])
+
+  const speakAlert = (text) => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel() // Cancel any ongoing speech
+      const utterance = new SpeechSynthesisUtterance(text)
+      utterance.rate = 0.9
+      utterance.pitch = 1
+      utterance.volume = 1
+      window.speechSynthesis.speak(utterance)
+    }
+  }
+
+  const speakViolation = (card) => {
+    const text = `${card.junction}. Priority ${card.tier}. Gridlock score ${card.gridlock_score}. ${card.violation_count} violations recorded. ${card.top_vehicle} is the most common vehicle type.`
+    speakAlert(text)
+  }
 
   if (loading) return <PageSkeleton />
   if (error) return <ErrorState message={error} onRetry={refetch} />
@@ -20,13 +52,34 @@ export default function FieldOfficer() {
           <MapPin className="w-5 h-5 text-signal-emerald" />
           Field Dispatch
         </h1>
-        <button
-          onClick={refetch}
-          className="px-3 py-1.5 bg-elevated rounded-lg text-xs text-muted"
-        >
-          Refresh
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setVoiceEnabled(!voiceEnabled)}
+            className={`p-2 rounded-lg transition-colors ${
+              voiceEnabled
+                ? 'bg-accent text-white'
+                : 'bg-elevated text-muted'
+            }`}
+            title={voiceEnabled ? 'Disable voice alerts' : 'Enable voice alerts'}
+          >
+            {voiceEnabled ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+          </button>
+          <button
+            onClick={refetch}
+            className="px-3 py-1.5 bg-elevated rounded-lg text-xs text-muted"
+          >
+            Refresh
+          </button>
+        </div>
       </div>
+
+      {/* Voice Mode Banner */}
+      {voiceEnabled && (
+        <div className="flex items-center gap-2 p-3 bg-accent/10 border border-accent/20 rounded-lg text-xs text-accent">
+          <Volume2 className="w-4 h-4 animate-pulse" />
+          Voice alerts enabled — Hands-free operation mode active
+        </div>
+      )}
 
       <p className="text-xs text-muted">Tap a violation → Go to location → Tow → Done</p>
 
@@ -64,6 +117,20 @@ export default function FieldOfficer() {
             {/* Expanded Details */}
             {selectedViolation === i && (
               <div className="space-y-3 pt-3 border-t border-white/[0.06]">
+                {/* Voice Button */}
+                {voiceEnabled && (
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      speakViolation(card)
+                    }}
+                    className="flex items-center justify-center gap-2 w-full py-2 bg-accent/20 text-accent rounded-lg text-sm font-medium"
+                  >
+                    <Volume2 className="w-4 h-4" />
+                    Read Aloud
+                  </button>
+                )}
+
                 {/* Action Button — One Tap */}
                 <a
                   href={`https://www.google.com/maps?q=${card.lat},${card.lon}`}

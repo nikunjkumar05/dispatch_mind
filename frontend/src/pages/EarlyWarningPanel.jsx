@@ -1,24 +1,11 @@
 import { useState, useEffect, useCallback } from 'react'
-import {
-  AlertTriangle, Clock, MapPin, Truck, Activity,
-  ChevronRight, RefreshCw, Radio
-} from 'lucide-react'
+import { TriangleAlert as AlertTriangle, Clock, MapPin, Truck, Activity, ChevronRight, RefreshCw, Radio, Zap } from 'lucide-react'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid,
   Tooltip, ResponsiveContainer, ReferenceLine
 } from 'recharts'
 
 const REFRESH_INTERVAL = 30_000
-
-const MOCK_TIPPING_DATA = [
-  { time: '06:00', weight: 12 }, { time: '06:15', weight: 18 },
-  { time: '06:30', weight: 25 }, { time: '06:45', weight: 34 },
-  { time: '07:00', weight: 52 }, { time: '07:15', weight: 68 },
-  { time: '07:30', weight: 89 }, { time: '07:45', weight: 110 },
-  { time: '08:00', weight: 145 }, { time: '08:15', weight: 198 },
-  { time: '08:30', weight: 275, tipping: true },
-  { time: '08:45', weight: 310 }, { time: '09:00', weight: 290 },
-]
 
 function countdownMinutes() {
   const now = new Date()
@@ -222,8 +209,11 @@ export default function EarlyWarningPanel() {
         </div>
       )}
 
-      {/* Tipping Point Forecast */}
-      <TippingPointChart junction={hero?.junction_node || 'BTP044'} />
+      {/* Tipping Point Forecast — Now uses real API */}
+      <TippingPointChart />
+
+      {/* Anomaly Detection Section */}
+      <AnomalyDetectionPanel />
     </div>
   )
 }
@@ -266,90 +256,148 @@ function ZoneCard({ zone }) {
   )
 }
 
-function TippingPointChart({ junction }) {
-  const tippingBlock = MOCK_TIPPING_DATA.find(d => d.tipping)
+function TippingPointChart() {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/tipping-points')
+      .then(res => res.json())
+      .then(json => {
+        setData(json)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (loading) {
+    return (
+      <div className="card border border-white/[0.06] animate-pulse">
+        <div className="h-48 bg-elevated/50 rounded-xl" />
+      </div>
+    )
+  }
+
+  const predictions = data?.predictions || []
+  const critical = predictions.filter(p => p.status === 'CRITICAL').slice(0, 5)
 
   return (
     <div className="card border border-white/[0.06]">
       <div className="flex items-center justify-between mb-4">
         <div>
           <h3 className="text-sm font-medium text-chalk flex items-center gap-2">
-            <Activity className="w-4 h-4 text-signal-amber" />
-            Tipping Point Forecast
+            <Zap className="w-4 h-4 text-signal-amber" />
+            Tipping Point Predictions
           </h3>
           <p className="text-xs text-muted mt-0.5">
-            {junction} — Morning congestion build-up
+            AI-detected congestion spikes — Predictive vs Reactive
           </p>
         </div>
-        {tippingBlock && (
-          <span className="px-2 py-0.5 bg-signal-red/10 text-signal-red text-[10px] font-bold rounded uppercase">
-            Tipping: {tippingBlock.time}
+        {data && (
+          <span className="px-2 py-0.5 bg-signal-amber/10 text-signal-amber text-[10px] font-bold rounded uppercase">
+            {data.total_junctions_with_tipping_points} Detected
           </span>
         )}
       </div>
 
-      <div className="h-56">
-        <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={MOCK_TIPPING_DATA} margin={{ top: 5, right: 10, left: -10, bottom: 0 }}>
-            <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" />
-            <XAxis
-              dataKey="time"
-              tick={{ fontSize: 10, fill: '#6B7280' }}
-              axisLine={{ stroke: 'rgba(255,255,255,0.06)' }}
-              tickLine={false}
-            />
-            <YAxis
-              tick={{ fontSize: 10, fill: '#6B7280' }}
-              axisLine={{ stroke: 'rgba(255,255,255,0.06)' }}
-              tickLine={false}
-            />
-            <Tooltip
-              contentStyle={{
-                backgroundColor: '#1F2937',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: '8px',
-                fontSize: '12px',
-                color: '#F9FAFB',
-              }}
-              formatter={(value) => [`${value}`, 'Congestion Weight']}
-            />
-            {tippingBlock && (
-              <ReferenceLine
-                x={tippingBlock.time}
-                stroke="#EF4444"
-                strokeDasharray="4 4"
-                strokeWidth={2}
-                label={{
-                  value: 'TIPPING POINT',
-                  position: 'top',
-                  fill: '#EF4444',
-                  fontSize: 10,
-                  fontWeight: 'bold',
-                }}
-              />
-            )}
-            <Line
-              type="monotone"
-              dataKey="weight"
-              stroke="#3B82F6"
-              strokeWidth={2}
-              dot={{ r: 3, fill: '#3B82F6' }}
-              activeDot={{ r: 5, stroke: '#F9FAFB', strokeWidth: 2 }}
-            />
-          </LineChart>
-        </ResponsiveContainer>
+      {critical.length === 0 ? (
+        <div className="text-center py-8">
+          <Activity className="w-8 h-8 text-signal-emerald mx-auto mb-2" />
+          <p className="text-sm text-muted">No critical tipping points detected</p>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {critical.map((pred, idx) => (
+            <div
+              key={idx}
+              className="flex items-center justify-between p-3 rounded-lg bg-elevated/30 border border-white/[0.04] hover:border-signal-red/20 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <Clock className="w-4 h-4 text-signal-red" />
+                <div>
+                  <p className="text-sm font-medium text-chalk">{pred.junction}</p>
+                  <p className="text-xs text-muted">{pred.message}</p>
+                </div>
+              </div>
+              <span className={`px-2 py-0.5 text-[10px] font-bold rounded ${
+                pred.status === 'CRITICAL'
+                  ? 'bg-signal-red/10 text-signal-red'
+                  : 'bg-signal-amber/10 text-signal-amber'
+              }`}>
+                {pred.predicted_time}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Methodology */}
+      <div className="mt-4 p-3 bg-black/20 rounded-lg text-xs text-muted">
+        <p className="flex items-center gap-1.5">
+          <Activity className="w-3.5 h-3.5" />
+          {data?.methodology || '7-hour rolling window, 3-sigma spike detection'}
+        </p>
+      </div>
+    </div>
+  )
+}
+
+function AnomalyDetectionPanel() {
+  const [data, setData] = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    fetch('/api/anomaly-scores')
+      .then(res => res.json())
+      .then(json => {
+        setData(json)
+        setLoading(false)
+      })
+      .catch(() => setLoading(false))
+  }, [])
+
+  if (loading) {
+    return null
+  }
+
+  const anomalies = data?.anomalies?.filter(a => a.is_anomaly).slice(0, 3) || []
+  if (anomalies.length === 0) return null
+
+  return (
+    <div className="card border border-signal-amber/20">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-medium text-chalk flex items-center gap-2">
+            <AlertTriangle className="w-4 h-4 text-signal-amber" />
+            Isolation Forest Anomalies
+          </h3>
+          <p className="text-xs text-muted mt-0.5">
+            First-in-India ML for parking violations
+          </p>
+        </div>
+        <span className="px-2 py-0.5 bg-signal-amber/10 text-signal-amber text-[10px] font-bold rounded uppercase">
+          {data?.anomaly_count || 0} Anomalies
+        </span>
       </div>
 
-      {/* Legend */}
-      <div className="flex items-center justify-center gap-4 mt-3 text-[10px] text-muted">
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-0.5 bg-accent rounded" />
-          Congestion Weight
-        </span>
-        <span className="flex items-center gap-1.5">
-          <span className="w-3 h-0.5 bg-signal-red rounded border-dashed" />
-          Tipping Point
-        </span>
+      <div className="space-y-2">
+        {anomalies.map((a, idx) => (
+          <div
+            key={idx}
+            className="flex items-center justify-between p-3 rounded-lg bg-signal-amber/5 border border-signal-amber/10"
+          >
+            <div>
+              <p className="text-sm font-medium text-chalk">{a.junction}</p>
+              <p className="text-xs text-muted">{a.anomaly_reason}</p>
+            </div>
+            <div className="text-right">
+              <p className="text-[10px] text-muted">Score</p>
+              <p className="font-mono text-lg font-bold text-signal-amber">
+                {a.anomaly_score.toFixed(3)}
+              </p>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   )

@@ -3,6 +3,7 @@ PhantomBlockageAI — FastAPI Backend
 Exposes the Early Warning System endpoint for the React frontend.
 """
 
+import os
 import math
 import threading
 from datetime import datetime, timezone
@@ -29,6 +30,7 @@ app.add_middleware(
     allow_origins=os.environ.get("CORS_ORIGINS", "http://localhost:3000,http://127.0.0.1:3000").split(","),
     allow_methods=["*"],
     allow_headers=["*"],
+    allow_credentials=True,
 )
 
 # ---------------------------------------------------------------------------
