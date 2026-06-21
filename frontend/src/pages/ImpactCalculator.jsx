@@ -1,10 +1,49 @@
 import { useState } from 'react'
 import { useApi } from '../utils/api'
-import { Target, TrendingDown, Users, Cloud, ArrowRight, Zap } from 'lucide-react'
+import { Target, TrendingDown, Users, Cloud, ArrowRight, Zap, CheckCircle, Clock, MapPin, Phone } from 'lucide-react'
 
-export default function ImpactCalculator() {
+const ROLE_THEMES = {
+  constable: {
+    primary: 'from-emerald-500 to-teal-600',
+    accent: 'text-emerald-400',
+    bgAccent: 'bg-emerald-500/10',
+    borderAccent: 'border-emerald-500/20',
+    gradientText: 'from-emerald-400 to-teal-400',
+    icon: CheckCircle,
+    title: 'My Beat Impact',
+    subtitle: 'Real-time clearance impact tracking',
+    quickStats: ['Clearances Today', 'Avg Recovery Time', 'Violations Logged']
+  },
+  si: {
+    primary: 'from-blue-500 to-indigo-600',
+    accent: 'text-blue-400',
+    bgAccent: 'bg-blue-500/10',
+    borderAccent: 'border-blue-500/20',
+    gradientText: 'from-blue-400 to-indigo-400',
+    icon: Clock,
+    title: 'Station Dashboard',
+    subtitle: 'Resource allocation & team performance',
+    quickStats: ['Team Efficiency', 'Coverage Area', 'Response Time']
+  },
+  acp: {
+    primary: 'from-purple-500 to-pink-600',
+    accent: 'text-purple-400',
+    bgAccent: 'bg-purple-500/10',
+    borderAccent: 'border-purple-500/20',
+    gradientText: 'from-purple-400 to-pink-400',
+    icon: MapPin,
+    title: 'City Overview',
+    subtitle: 'Strategic congestion intelligence',
+    quickStats: ['City-wide Impact', 'Hotspot Trends', 'Policy ROI']
+  }
+}
+
+export default function ImpactCalculator({ role = 'constable' }) {
   const [selectedScenario, setSelectedScenario] = useState(5)
   const { data, loading } = useApi('/impact-summary')
+  
+  const theme = ROLE_THEMES[role] || ROLE_THEMES.constable
+  const ThemeIcon = theme.icon
 
   if (loading) return <LoadingSkeleton />
 
@@ -15,46 +54,76 @@ export default function ImpactCalculator() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div>
-        <h1 className="font-heading font-bold text-2xl text-chalk flex items-center gap-2">
-          <Target className="w-6 h-6 text-signal-emerald" />
-          Impact Calculator
-        </h1>
-        <p className="text-muted text-sm mt-1">
-          Clear top junctions to reduce congestion — here's the measurable impact
-        </p>
+      {/* Role-Specific Header with Gradient */}
+      <div className={`relative overflow-hidden rounded-2xl p-6 bg-gradient-to-r ${theme.primary} bg-opacity-10`}>
+        <div className="absolute inset-0 bg-black/20" />
+        <div className="relative flex items-start justify-between">
+          <div className="flex items-center gap-4">
+            <div className={`w-12 h-12 rounded-xl bg-white/20 backdrop-blur-sm flex items-center justify-center`}>
+              <ThemeIcon className="w-6 h-6 text-white" />
+            </div>
+            <div>
+              <h1 className="font-heading font-bold text-2xl text-white flex items-center gap-2">
+                {theme.title}
+              </h1>
+              <p className="text-white/80 text-sm mt-1">
+                {theme.subtitle}
+              </p>
+            </div>
+          </div>
+          <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/20 backdrop-blur-sm">
+            <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span className="text-xs text-white font-medium">Live Data</span>
+          </div>
+        </div>
+        
+        {/* Quick Stats Row */}
+        <div className="mt-6 grid grid-cols-3 gap-4">
+          {theme.quickStats.map((stat, idx) => (
+            <div key={idx} className="text-center">
+              <p className="text-[10px] uppercase tracking-wider text-white/60">{stat}</p>
+              <p className="text-lg font-bold text-white mt-0.5">
+                {idx === 0 ? '--' : idx === 1 ? '--' : '--'}
+              </p>
+            </div>
+          ))}
+        </div>
       </div>
 
       {/* Total Impact Banner */}
-      <div className="card border-signal-red/20 bg-signal-red/5">
-        <p className="text-xs uppercase tracking-wider text-signal-red font-semibold mb-3">
+      <div className={`card border-2 ${theme.borderAccent} ${theme.bgAccent}`}>
+        <p className={`text-xs uppercase tracking-wider ${theme.accent} font-semibold mb-4 flex items-center gap-2`}>
+          <Zap className="w-4 h-4" />
           Current Total Impact (All Violations)
         </p>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <MetricCard
-            icon={<Zap className="w-4 h-4" />}
+            icon={<Zap className="w-5 h-5" />}
             label="Vehicles Blocked/hr"
             value={total.vehicles_blocked_hr?.toLocaleString() || '0'}
             color="text-signal-red"
+            gradient={false}
           />
           <MetricCard
-            icon={<TrendingDown className="w-4 h-4" />}
+            icon={<TrendingDown className="w-5 h-5" />}
             label="Economic Loss/hr"
-            value={`INR ${total.economic_loss_inr?.toLocaleString() || '0'}`}
+            value={`INR ${(total.economic_loss_inr || 0).toLocaleString()}`}
             color="text-signal-orange"
+            gradient={false}
           />
           <MetricCard
-            icon={<Users className="w-4 h-4" />}
+            icon={<Users className="w-5 h-5" />}
             label="Person-Hours Blocked"
-            value={total.person_hours_blocked?.toLocaleString() || '0'}
+            value={(total.person_hours_blocked || 0).toLocaleString()}
             color="text-signal-amber"
+            gradient={false}
           />
           <MetricCard
-            icon={<Cloud className="w-4 h-4" />}
+            icon={<Cloud className="w-5 h-5" />}
             label="CO2 Emissions (kg)"
-            value={total.co2_kg?.toLocaleString() || '0'}
+            value={(total.co2_kg || 0).toLocaleString()}
             color="text-signal-emerald"
+            gradient={false}
           />
         </div>
       </div>

@@ -103,4 +103,71 @@
   .glow-line {
     @apply h-[2px] bg-gradient-to-r from-accent/0 via-accent to-accent/0;
   }
+
+  /* Role-specific gradient backgrounds */
+  .role-constable {
+    @apply from-emerald-500/10 to-teal-600/10;
+  }
+
+  .role-si {
+    @apply from-blue-500/10 to-indigo-600/10;
+  }
+
+  .role-acp {
+    @apply from-purple-500/10 to-pink-600/10;
+  }
+
+  /* Animation utilities */
+  .animate-pulse-subtle {
+    animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+
+  @keyframes pulse-subtle {
+    0%, 100% {
+      opacity: 1;
+    }
+    50% {
+      opacity: 0.7;
+    }
+  }
+
+  /* Interactive card hover effects */
+  .interactive-card {
+    @apply transform transition-all duration-300 hover:scale-[1.02] hover:shadow-2xl;
+  }
+
+  /* Gradient text utility */
+  .gradient-text {
+    @apply bg-clip-text text-transparent bg-gradient-to-r;
+  }
+
+  /* Glass morphism effect */
+  .glass-panel {
+    @apply bg-white/5 backdrop-blur-lg border border-white/10;
+  }
+
+  /* Status indicator pulse */
+  .status-pulse {
+    @apply relative;
+  }
+
+  .status-pulse::after {
+    content: '';
+    @apply absolute inset-0 rounded-full animate-ping opacity-75;
+  }
+}
+
+@layer utilities {
+  /* Custom scrollbar for role navigation */
+  .role-scroll::-webkit-scrollbar {
+    height: 4px;
+  }
+
+  .role-scroll::-webkit-scrollbar-track {
+    @apply bg-elevated/50 rounded-full;
+  }
+
+  .role-scroll::-webkit-scrollbar-thumb {
+    @apply bg-accent/30 rounded-full;
+  }
 }

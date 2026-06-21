@@ -1,38 +1,70 @@
-# Environment variables (API keys)
-.env
-.env.local
-.env.*.local
-
-# Python
-__pycache__/
+```
+# Compiled and build artifacts
 *.pyc
-*.pyo
-*.egg-info/
+__pycache__/
+*.o
+*.obj
 dist/
 build/
+target/
+
+# Dependencies
 .venv/
 venv/
-
-# Node
 node_modules/
-frontend/dist/
-HYBRID_SYSTEM_PROMPT.md
-system_prompts_collection.md
-.mimocode/
-.opencode/
-# Data files (too large for git)
-*.csv
-data/raw/
-data/processed/
-outputs/models/*.pkl
+.julia/
+zig*/
+.mypy_cache/
+.pytest_cache/
+.gradle/
 
-# IDE
+# Logs and temp files
+*.log
+*.tmp
+*.swp
+*.swo
+
+# Environment
+.env
+.env.local
+.env.*
+
+# Editors
 .vscode/
 .idea/
+*.swp
+*.swo
 
-# OS
+# System files
 .DS_Store
 Thumbs.db
 
-# Logs
-*.log
+# Coverage
+coverage/
+htmlcov/
+.coverage
+
+# Compressed files
+*.zip
+*.gz
+*.tar
+*.tgz
+*.bz2
+*.xz
+*.7z
+*.rar
+*.zst
+*.lz4
+*.lzh
+*.cab
+*.arj
+*.rpm
+*.deb
+*.Z
+*.lz
+*.lzo
+*.tar.gz
+*.tar.bz2
+*.tar.xz
+*.tar.zst
+```
