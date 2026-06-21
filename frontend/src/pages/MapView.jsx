@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { mappls } from 'mappls-web-maps'
 import { useApi, tierColor } from '../utils/api'
-import { MapPin, Layers, X, AlertTriangle } from 'lucide-react'
+import { MapPin, Layers, X, AlertTriangle, Bot, Navigation } from 'lucide-react'
 import ErrorState from '../components/ErrorState'
 import TierBadge from '../components/TierBadge'
 
@@ -9,12 +10,16 @@ const MAPPLS_KEY = import.meta.env.VITE_MAPPLS_API_KEY
 const MAP_ID = 'dispatchmind-map'
 
 export default function MapView() {
+  const navigate = useNavigate()
   const { data, loading, error, refetch } = useApi('/map-data')
+  const { data: spilloverData } = useApi('/spillover-zones')
   const [selectedViolation, setSelectedViolation] = useState(null)
+  const [selectedZone, setSelectedZone] = useState(null)
   const [mapReady, setMapReady] = useState(false)
   const [mapError, setMapError] = useState(null)
   const mapInstanceRef = useRef(null)
   const markersRef = useRef([])
+  const spilloverRef = useRef([])
   const mapplsRef = useRef(null)
   const initRef = useRef(false)
 
@@ -63,6 +68,8 @@ export default function MapView() {
       initRef.current = false
       markersRef.current.forEach(m => { try { m.remove() } catch(e) {} })
       markersRef.current = []
+      spilloverRef.current.forEach(m => { try { m.remove() } catch(e) {} })
+      spilloverRef.current = []
       if (mapInstanceRef.current) {
         try { mapInstanceRef.current.remove() } catch(e) {}
         mapInstanceRef.current = null
@@ -99,6 +106,42 @@ export default function MapView() {
       if (marker) markersRef.current.push(marker)
     })
   }, [mapReady, data])
+
+  useEffect(() => {
+    if (!mapReady || !mapInstanceRef.current || !spilloverData?.zones?.length) return
+
+    const map = mapInstanceRef.current
+    spilloverRef.current.forEach(m => { try { m.remove() } catch(e) {} })
+    spilloverRef.current = []
+
+    const spilloverIcon = createSpilloverIcon()
+    spilloverData.zones.forEach(zone => {
+      const circle = new window.mappls.Circle({
+        map,
+        center: { lat: zone.center_lat, lng: zone.center_lon },
+        radius: 200,
+        strokeColor: '#a855f7',
+        strokeOpacity: 0.8,
+        strokeWeight: 2,
+        fillColor: '#a855f7',
+        fillOpacity: 0.3,
+      })
+      if (circle) {
+        circle.addListener('click', () => setSelectedZone(zone))
+        spilloverRef.current.push(circle)
+      }
+
+      const marker = new window.mappls.Marker({
+        map,
+        position: { lat: zone.center_lat, lng: zone.center_lon },
+        icon: spilloverIcon,
+      })
+      if (marker) {
+        marker.addListener('click', () => setSelectedZone(zone))
+        spilloverRef.current.push(marker)
+      }
+    })
+  }, [mapReady, spilloverData])
 
   if (mapError) {
     return (
@@ -175,6 +218,10 @@ export default function MapView() {
               <div className="w-2.5 h-2.5 rounded-full bg-signal-red" />
               <span className="text-xs text-muted">Violation</span>
             </div>
+            <div className="flex items-center gap-2">
+              <div className="w-3 h-3 rounded-full border-2 border-dashed" style={{ borderColor: '#a855f7', backgroundColor: 'rgba(168,85,247,0.3)' }} />
+              <span className="text-xs text-muted">AI Spillover Zone</span>
+            </div>
           </div>
         </div>
       </div>
@@ -218,6 +265,49 @@ export default function MapView() {
           </div>
         </div>
       )}
+
+      {/* Selected Spillover Zone Detail */}
+      {selectedZone && (
+        <div className="card border-[#a855f7]/20 relative" style={{ boxShadow: '0 0 20px rgba(168,85,247,0.1)' }}>
+          <button 
+            onClick={() => setSelectedZone(null)}
+            className="absolute top-3 right-3 p-1 rounded-lg hover:bg-elevated transition-colors"
+          >
+            <X className="w-4 h-4 text-muted" />
+          </button>
+          
+          <div className="flex items-start gap-4">
+            <div className="p-2 rounded-lg bg-[#a855f7]/10">
+              <Bot className="w-5 h-5 text-[#a855f7]" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-2">
+                <h3 className="font-heading font-semibold text-base text-chalk truncate">
+                  🤖 AI Detected: {selectedZone.label} Zone
+                </h3>
+              </div>
+              <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm">
+                <span className="text-muted">
+                  Severity: <span className="font-mono text-chalk">{selectedZone.severity}</span>
+                </span>
+                <span className="text-muted">
+                  Active Vehicles: <span className="font-mono text-chalk">{selectedZone.vehicle_count}</span>
+                </span>
+                <span className="text-muted">
+                  Center: <span className="font-mono text-chalk">{selectedZone.center_lat.toFixed(4)}, {selectedZone.center_lon.toFixed(4)}</span>
+                </span>
+              </div>
+              <button
+                onClick={() => navigate('/dispatch')}
+                className="mt-3 inline-flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#a855f7]/10 text-[#a855f7] text-sm font-medium hover:bg-[#a855f7]/20 transition-colors"
+              >
+                <Navigation className="w-3.5 h-3.5" />
+                Dispatch Area Patrol
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -226,4 +316,20 @@ function createCircleIcon(color, radius, isHollow = false) {
   const size = radius * 2 + 4
   const fill = isHollow ? 'transparent' : color
   return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}"><circle cx="${size/2}" cy="${size/2}" r="${radius}" fill="${fill}" stroke="${color}" stroke-width="2" opacity="0.85"/></svg>`)}`
+}
+
+function createSpilloverIcon() {
+  const size = 22
+  const id = `glow-${Math.random().toString(36).slice(2, 8)}`
+  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}">
+    <defs>
+      <filter id="${id}" x="-50%" y="-50%" width="200%" height="200%">
+        <feGaussianBlur stdDeviation="2" result="blur"/>
+        <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+      </filter>
+    </defs>
+    <circle cx="${size/2}" cy="${size/2}" r="8" fill="#a855f7" opacity="0.3" filter="url(#${id})"/>
+    <circle cx="${size/2}" cy="${size/2}" r="5" fill="#a855f7" stroke="white" stroke-width="1.5"/>
+    <circle cx="${size/2}" cy="${size/2}" r="2" fill="white"/>
+  </svg>`)}`
 }

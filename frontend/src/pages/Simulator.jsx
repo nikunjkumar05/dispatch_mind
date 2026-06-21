@@ -28,7 +28,7 @@ export default function Simulator() {
       <div>
         <h1 className="font-heading font-bold text-2xl text-chalk flex items-center gap-2">
           <Sliders className="w-6 h-6 text-accent" />
-          What-If Simulator
+          Enforcement Impact Calculator
         </h1>
         <p className="text-muted text-sm mt-1">
           See the impact of clearing top violations on overall congestion severity

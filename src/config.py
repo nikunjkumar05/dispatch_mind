@@ -8,7 +8,7 @@ making the system city-agnostic, testable, and maintainable.
 import json
 import os
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List
 
 CONFIG_PATH = Path(__file__).parent.parent / "config" / "app.json"
 
@@ -93,3 +93,15 @@ def get_validation_config() -> Dict[str, Any]:
 
 def get_enhanced_cascade_config() -> Dict[str, Any]:
     return get_config().get('enhanced_cascade', {})
+
+
+def get_bengaluru_config() -> Dict[str, Any]:
+    return get_config().get('bengaluru', {})
+
+
+def get_metro_construction_zones() -> List[Dict[str, Any]]:
+    return get_bengaluru_config().get('metro_construction_zones', [])
+
+
+def get_narrow_roads_config() -> Dict[str, Any]:
+    return get_bengaluru_config().get('narrow_roads', {})
