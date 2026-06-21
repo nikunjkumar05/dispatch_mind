@@ -28,16 +28,20 @@ from src.cascade import run_cascade_analysis
 from src.curbflex import run_curbflex
 from src.dispatch import run_dispatch
 from src.realtime_alerts import ViolationAlertSystem
+from src.spillover_ai import detect_spillover_zones
+from phantom_risk import calculate_phantom_risk_score
 
 logger = logging.getLogger("dispatchmind")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load pipeline in background thread on startup."""
+    """Load pipeline and train models in background thread on startup."""
     def _bg_load():
         try:
             _ensure_base_data()
+            if _pipeline_data is not None:
+                _ensure_models()
         except Exception:
             logger.exception("Pipeline failed to load")
 
@@ -77,13 +81,18 @@ _models = None
 _validation = None
 _cascade = None
 _curbflex = None
+_spillover_zones = None
 _alert_system = ViolationAlertSystem()
+
+_phantom_data = None
 
 # Thread safety locks for lazy-loading
 _lock_base = threading.Lock()
 _lock_models = threading.Lock()
 _lock_cascade = threading.Lock()
 _lock_curbflex = threading.Lock()
+_lock_spillover = threading.Lock()
+_lock_phantom = threading.Lock()
 
 
 def _ensure_base_data():
@@ -122,7 +131,7 @@ def _ensure_models():
             return
         logger.info("Training prediction models...")
         _models = run_prediction(_pipeline_data)
-        logger.info("Models trained.")
+        logger.info("Models trained: R²=%.4f", _models.get('xgb_metrics', {}).get('r2', 0))
 
 
 def _ensure_cascade():
@@ -155,6 +164,38 @@ def _ensure_curbflex():
         logger.info("CurbFlex done.")
 
 
+def _ensure_spillover():
+    global _spillover_zones
+    if _spillover_zones is not None:
+        return
+    with _lock_spillover:
+        if _spillover_zones is not None:
+            return
+        if _pipeline_data is None:
+            logger.warning("Cannot run Spillover detection: base data not loaded")
+            return
+        logger.info("Running AI Spillover Detection...")
+        _spillover_zones = detect_spillover_zones(_pipeline_data)
+        logger.info("Spillover detection done: %d zones found.", len(_spillover_zones))
+
+
+def _ensure_phantom_data():
+    """Load phantom blockage preprocessed data."""
+    global _phantom_data
+    if _phantom_data is not None:
+        return
+    with _lock_phantom:
+        if _phantom_data is not None:
+            return
+        try:
+            from preprocess import preprocess
+            logger.info("Loading PhantomBlockageAI data...")
+            _phantom_data = preprocess()
+            logger.info("PhantomBlockageAI data loaded: %d rows", len(_phantom_data))
+        except Exception:
+            logger.exception("Failed to load PhantomBlockageAI data")
+
+
 # ---------------------------------------------------------------------------
 # Utilities
 # ---------------------------------------------------------------------------
@@ -185,6 +226,10 @@ class OverviewStats(BaseModel):
     low_count: int
     pareto_pct: float
     pareto_impact_pct: float
+    vehicles_blocked_hr: int
+    economic_loss_inr: float
+    co2_kg: float
+    person_hours_blocked: float
 
 
 class PriorityCard(BaseModel):
@@ -235,6 +280,27 @@ class AlertOut(BaseModel):
     message: str
 
 
+class RiskZone(BaseModel):
+    rank: int
+    latitude: float
+    longitude: float
+    vehicle_type: str
+    weight: float
+    nearby_seed_count: int
+    avg_distance_to_seeds: float
+    phantom_risk_score: float
+    recommended_action: str
+
+
+class EarlyWarningResponse(BaseModel):
+    current_time_block: str
+    next_time_block: str
+    query_time: str
+    top_risk_zones: List[RiskZone]
+    total_feeders_scored: int
+    message: str
+
+
 # ---------------------------------------------------------------------------
 # API Endpoints
 # ---------------------------------------------------------------------------
@@ -276,6 +342,10 @@ async def get_overview():
         low_count=int(tier_counts.get('LOW', 0)),
         pareto_pct=round(pareto_pct, 1),
         pareto_impact_pct=82.0,
+        vehicles_blocked_hr=int(df['vehicles_blocked_hr'].sum()),
+        economic_loss_inr=round(df['economic_loss_inr'].sum(), 2),
+        co2_kg=round(df['co2_kg'].sum(), 1),
+        person_hours_blocked=round(df['person_hours_blocked'].sum(), 1),
     )
 
 
@@ -585,6 +655,62 @@ async def get_pareto():
     }
 
 
+@app.get("/api/predictions")
+async def get_predictions():
+    """ML model predictions — XGBoost/LightGBM predicted congestion cost per junction."""
+    await asyncio.to_thread(_ensure_models)
+
+    if _models is None or _pipeline_data is None:
+        raise HTTPException(503, "Models not trained or pipeline not loaded")
+
+    from src.prediction import prepare_features
+    import pandas as pd
+
+    df = _pipeline_data.copy()
+    df, features, _ = prepare_features(df)
+
+    xgb_model = _models.get('xgb_model')
+    lgb_model = _models.get('lgb_model')
+
+    if xgb_model is None and lgb_model is None:
+        raise HTTPException(503, "No models available")
+
+    # Get predictions from available models
+    X = df[features].fillna(0)
+    if xgb_model is not None:
+        df['predicted_cost_xgb'] = xgb_model.predict(X)
+    if lgb_model is not None:
+        df['predicted_cost_lgb'] = lgb_model.predict(X)
+
+    # Use XGBoost as primary if available, else LightGBM
+    pred_col = 'predicted_cost_xgb' if xgb_model is not None else 'predicted_cost_lgb'
+    df['predicted_cost'] = df[pred_col].clip(lower=0)
+
+    # Aggregate by junction
+    junction_preds = df.groupby('mapped_junction').agg(
+        actual_cost=('congestion_cost', 'sum'),
+        predicted_cost=('predicted_cost', 'sum'),
+        violation_count=('single_violation', 'count'),
+        avg_gridlock=('gridlock_score', 'mean'),
+    ).reset_index()
+
+    junction_preds['prediction_error'] = (
+        junction_preds['predicted_cost'] - junction_preds['actual_cost']
+    ).round(2)
+    junction_preds['prediction_pct'] = (
+        junction_preds['predicted_cost'] / junction_preds['actual_cost'].replace(0, np.nan) * 100
+    ).round(1)
+
+    # Sort by predicted cost (highest first)
+    junction_preds = junction_preds.sort_values('predicted_cost', ascending=False)
+
+    return {
+        "junctions": junction_preds.head(30).to_dict('records'),
+        "model_metrics": _models.get('xgb_metrics', {}),
+        "features_used": len(features),
+    }
+
+
 @app.get("/api/simulator")
 async def get_simulator(
     top_n: int = 10,
@@ -654,6 +780,141 @@ async def get_simulator(
         "filter_station": filter_station or "ALL",
         "filter_tier": filter_tier or "ALL",
     }
+
+
+@app.get("/api/impact-summary")
+async def get_impact_summary():
+    """Actionable impact summary: clear top N junctions = save X vehicles/hr = ₹Y."""
+    if _pipeline_data is None:
+        raise HTTPException(503, "Pipeline not loaded")
+
+    df = _pipeline_data
+    total_economic = df['economic_loss_inr'].sum()
+    total_vehicles = int(df['vehicles_blocked_hr'].sum())
+    total_co2 = round(df['co2_kg'].sum(), 1)
+    total_person_hours = round(df['person_hours_blocked'].sum(), 1)
+
+    j_stats = df.groupby('mapped_junction').agg(
+        total_delay=('congestion_cost', 'sum'),
+        vehicles_blocked=('vehicles_blocked_hr', 'sum'),
+        economic_loss=('economic_loss_inr', 'sum'),
+        co2=('co2_kg', 'sum'),
+        person_hours=('person_hours_blocked', 'sum'),
+        violation_count=('single_violation', 'count'),
+        avg_gridlock=('gridlock_score', 'mean'),
+    ).reset_index().sort_values('total_delay', ascending=False)
+
+    top5 = j_stats.head(5)
+    top10 = j_stats.head(10)
+
+    scenarios = []
+    for n, subset in [(1, j_stats.head(1)), (3, j_stats.head(3)), (5, top5), (10, top10)]:
+        scenarios.append({
+            "clear_count": n,
+            "junctions": subset['mapped_junction'].tolist(),
+            "vehicles_saved_hr": int(subset['vehicles_blocked'].sum()),
+            "economic_savings_inr": round(subset['economic_loss'].sum(), 2),
+            "co2_saved_kg": round(subset['co2'].sum(), 1),
+            "person_hours_saved": round(subset['person_hours'].sum(), 1),
+            "pct_of_total_impact": round(subset['economic_loss'].sum() / total_economic * 100, 1) if total_economic > 0 else 0,
+        })
+
+    return {
+        "total": {
+            "vehicles_blocked_hr": total_vehicles,
+            "economic_loss_inr": round(total_economic, 2),
+            "co2_kg": total_co2,
+            "person_hours_blocked": total_person_hours,
+        },
+        "scenarios": scenarios,
+        "top_junctions": j_stats.head(15).to_dict('records'),
+    }
+
+
+@app.get("/api/spillover-zones")
+async def get_spillover_zones():
+    """AI-detected spillover hotspots from metro/commercial parking."""
+    await asyncio.to_thread(_ensure_spillover)
+
+    if _spillover_zones is None:
+        raise HTTPException(503, "Spillover detection failed")
+
+    return {"zones": _spillover_zones, "count": len(_spillover_zones)}
+
+
+@app.get("/api/early-warning-system", response_model=EarlyWarningResponse)
+async def get_early_warning_system():
+    """Phantom Blockage AI — Top 5 risk zones with dispatch recommendations."""
+    from datetime import datetime, timezone
+    import math
+
+    await asyncio.to_thread(_ensure_phantom_data)
+
+    if _phantom_data is None:
+        raise HTTPException(503, "PhantomBlockageAI data not loaded")
+
+    now = datetime.now(timezone.utc)
+    minute_bucket = (now.minute // 15) * 15
+    current_tb = now.strftime(f"%H:{minute_bucket:02d}")
+
+    hour, minute = map(int, current_tb.split(":"))
+    minute += 15
+    if minute >= 60:
+        hour = (hour + 1) % 24
+        minute = 0
+    next_tb = f"{hour:02d}:{minute:02d}"
+
+    filtered = _phantom_data[_phantom_data["time_block"].isin([current_tb, next_tb])].copy()
+    risk_df = calculate_phantom_risk_score(filtered)
+
+    def fmt_12h(tb):
+        h, m = map(int, tb.split(":"))
+        return f"{h % 12 or 12}:{m:02d} {'AM' if h < 12 else 'PM'}"
+
+    if risk_df.empty:
+        return EarlyWarningResponse(
+            current_time_block=fmt_12h(current_tb),
+            next_time_block=fmt_12h(next_tb),
+            query_time=now.isoformat(),
+            top_risk_zones=[],
+            total_feeders_scored=0,
+            message="No phantom risk detected in current or next time block.",
+        )
+
+    top5 = risk_df.head(5)
+    zones = []
+    for rank, (_, row) in enumerate(top5.iterrows(), 1):
+        lat, lon = row["latitude"], row["longitude"]
+        junc = row["junction_node"]
+        vtype = row["vehicle_type"]
+        action = (
+            f"Dispatch tow truck to {lat}, {lon} now to prevent "
+            f"blockage at {junc} in 15 mins. "
+            f"Vehicle type: {vtype} (weight={row['weight']}). "
+            f"{row['nearby_seed_count']} active seed(s) within "
+            f"{row['avg_distance_to_seeds']}m. "
+            f"Risk score: {row['phantom_risk_score']}."
+        )
+        zones.append(RiskZone(
+            rank=rank,
+            latitude=round(lat, 6),
+            longitude=round(lon, 6),
+            vehicle_type=vtype,
+            weight=row["weight"],
+            nearby_seed_count=row["nearby_seed_count"],
+            avg_distance_to_seeds=row["avg_distance_to_seeds"],
+            phantom_risk_score=row["phantom_risk_score"],
+            recommended_action=action,
+        ))
+
+    return EarlyWarningResponse(
+        current_time_block=fmt_12h(current_tb),
+        next_time_block=fmt_12h(next_tb),
+        query_time=now.isoformat(),
+        top_risk_zones=zones,
+        total_feeders_scored=len(risk_df),
+        message=f"Found {len(risk_df)} phantom risk zones. Top 5 require immediate dispatch.",
+    )
 
 
 @app.get("/api/health")
