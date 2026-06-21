@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="200" height="200">
+  <defs>
+    <linearGradient id="hexGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#00D4FF;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#0891B2;stop-opacity:1" />
+    </linearGradient>
+    <filter id="glow">
+      <feGaussianBlur stdDeviation="3" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="200" height="200" fill="#0B0F19"/>
+  
+  <!-- Hexagon -->
+  <polygon points="100,15 175,57.5 175,142.5 100,185 25,142.5 25,57.5" 
+           fill="none" stroke="url(#hexGrad)" stroke-width="3" filter="url(#glow)"/>
+  
+  <!-- Network lines -->
+  <g stroke="#00D4FF" stroke-width="1.5" opacity="0.6">
+    <line x1="100" y1="60" x2="100" y2="140"/>
+    <line x1="60" y1="80" x2="140" y2="80"/>
+    <line x1="60" y1="120" x2="140" y2="120"/>
+    <line x1="70" y1="70" x2="130" y2="130"/>
+    <line x1="130" y1="70" x2="70" y2="130"/>
+  </g>
+  
+  <!-- Nodes -->
+  <circle cx="100" cy="60" r="4" fill="#00D4FF" filter="url(#glow)"/>
+  <circle cx="100" cy="140" r="4" fill="#00D4FF" filter="url(#glow)"/>
+  <circle cx="60" cy="80" r="4" fill="#00D4FF" filter="url(#glow)"/>
+  <circle cx="140" cy="80" r="4" fill="#00D4FF" filter="url(#glow)"/>
+  <circle cx="60" cy="120" r="4" fill="#00D4FF" filter="url(#glow)"/>
+  <circle cx="140" cy="120" r="4" fill="#00D4FF" filter="url(#glow)"/>
+  <circle cx="70" cy="70" r="3" fill="#00D4FF" filter="url(#glow)"/>
+  <circle cx="130" cy="70" r="3" fill="#00D4FF" filter="url(#glow)"/>
+  <circle cx="70" cy="130" r="3" fill="#00D4FF" filter="url(#glow)"/>
+  <circle cx="130" cy="130" r="3" fill="#00D4FF" filter="url(#glow)"/>
+  
+  <!-- Center node (larger) -->
+  <circle cx="100" cy="100" r="8" fill="#00D4FF" filter="url(#glow)"/>
+  <circle cx="100" cy="100" r="4" fill="#0B0F19"/>
+  <circle cx="100" cy="100" r="2" fill="#FFFFFF"/>
+</svg>

@@ -12,7 +12,12 @@ const MAP_ID = 'dispatchmind-map'
 export default function MapView() {
   const navigate = useNavigate()
   const { data, loading, error, refetch } = useApi('/map-data')
-  const { data: spilloverData } = useApi('/spillover-zones')
+  const [showSpillover, setShowSpillover] = useState(false)
+  const { data: spilloverData, loading: spilloverLoading } = useApi(
+    '/spillover-zones',
+    [],
+    { enabled: showSpillover }
+  )
   const [selectedViolation, setSelectedViolation] = useState(null)
   const [selectedZone, setSelectedZone] = useState(null)
   const [mapReady, setMapReady] = useState(false)
@@ -108,11 +113,14 @@ export default function MapView() {
   }, [mapReady, data])
 
   useEffect(() => {
-    if (!mapReady || !mapInstanceRef.current || !spilloverData?.zones?.length) return
-
     const map = mapInstanceRef.current
+    if (!mapReady || !map) return
+
     spilloverRef.current.forEach(m => { try { m.remove() } catch(e) {} })
     spilloverRef.current = []
+    setSelectedZone(null)
+
+    if (!showSpillover || !spilloverData?.zones?.length) return
 
     const spilloverIcon = createSpilloverIcon()
     spilloverData.zones.forEach(zone => {
@@ -141,7 +149,7 @@ export default function MapView() {
         spilloverRef.current.push(marker)
       }
     })
-  }, [mapReady, spilloverData])
+  }, [mapReady, showSpillover, spilloverData])
 
   if (mapError) {
     return (
@@ -183,6 +191,20 @@ export default function MapView() {
           <Layers className="w-3 h-3" />
           Powered by MapmyIndia
         </div>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={() => setShowSpillover(value => !value)}
+          className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border text-sm transition-all ${
+            showSpillover
+              ? 'bg-[#a855f7]/10 border-[#a855f7]/30 text-[#c084fc]'
+              : 'bg-elevated border-white/[0.08] text-muted hover:text-chalk hover:border-accent/30'
+          }`}
+        >
+          <Bot className="w-3.5 h-3.5" />
+          {spilloverLoading ? 'Loading spillover...' : showSpillover ? 'Hide Spillover Zones' : 'Show Spillover Zones'}
+        </button>
       </div>
 
       {/* Map */}

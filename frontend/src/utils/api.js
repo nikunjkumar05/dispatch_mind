@@ -23,15 +23,22 @@ function setCacheEntry(key, data) {
   cache.set(key, { data, ts: Date.now() })
 }
 
-export function useApi(endpoint, deps = []) {
+export function useApi(endpoint, deps = [], options = {}) {
+  const { enabled = true } = options
   const [data, setData] = useState(null)
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(enabled)
   const [error, setError] = useState(null)
   const [refreshKey, setRefreshKey] = useState(0)
   const cacheKey = getCacheKey(endpoint)
 
   useEffect(() => {
     let cancelled = false
+
+    if (!enabled) {
+      setLoading(false)
+      setError(null)
+      return () => { cancelled = true }
+    }
 
     const cached = getCacheEntry(cacheKey)
     if (cached && refreshKey === 0) {
@@ -63,7 +70,7 @@ export function useApi(endpoint, deps = []) {
       })
 
     return () => { cancelled = true }
-  }, [...deps, refreshKey])
+  }, [...deps, refreshKey, enabled])
 
   const refetch = () => {
     cache.delete(cacheKey)

@@ -15,7 +15,7 @@ from typing import List, Dict, Any
 
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
@@ -36,12 +36,10 @@ logger = logging.getLogger("dispatchmind")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Load pipeline and train models in background thread on startup."""
+    """Warm the base pipeline in the background without blocking startup."""
     def _bg_load():
         try:
             _ensure_base_data()
-            if _pipeline_data is not None:
-                _ensure_models()
         except Exception:
             logger.exception("Pipeline failed to load")
 
@@ -74,6 +72,21 @@ COORDS_PATH = os.environ.get(
     "DISPATCHMIND_COORDS",
     "data/external/junction_coords.json",
 )
+CACHE_PATH = Path(os.environ.get(
+    "DISPATCHMIND_CACHE",
+    "data/processed/dispatchmind_scored.parquet",
+))
+
+REQUIRED_SCORED_COLUMNS = {
+    "mapped_junction",
+    "congestion_cost",
+    "gridlock_score",
+    "impact_tier",
+    "vehicles_blocked_hr",
+    "economic_loss_inr",
+    "co2_kg",
+    "person_hours_blocked",
+}
 
 _pipeline_data = None
 _junction_coords = None
@@ -83,6 +96,8 @@ _cascade = None
 _curbflex = None
 _spillover_zones = None
 _alert_system = ViolationAlertSystem()
+_pipeline_loading = False
+_pipeline_error = None
 
 _phantom_data = None
 
@@ -97,7 +112,7 @@ _lock_phantom = threading.Lock()
 
 def _ensure_base_data():
     """Load core pipeline (stages 1-2) synchronously — fast, ~18s."""
-    global _pipeline_data, _junction_coords
+    global _pipeline_data, _junction_coords, _pipeline_loading, _pipeline_error
 
     if _pipeline_data is not None:
         return
@@ -106,17 +121,41 @@ def _ensure_base_data():
         if _pipeline_data is not None:
             return
 
+        _pipeline_loading = True
+        _pipeline_error = None
+
         if not Path(CSV_PATH).exists() or not Path(COORDS_PATH).exists():
-            logger.warning("Data files not found: %s, %s", CSV_PATH, COORDS_PATH)
+            _pipeline_error = f"Data files not found: {CSV_PATH}, {COORDS_PATH}"
+            _pipeline_loading = False
+            logger.warning(_pipeline_error)
             return
 
         with open(COORDS_PATH) as f:
             _junction_coords = json.load(f)
 
-        logger.info("Loading base pipeline...")
-        _pipeline_data = run_pipeline(CSV_PATH, junction_coords=_junction_coords)
-        _pipeline_data = run_congestion_cost(_pipeline_data, _junction_coords)
-        logger.info("Base pipeline loaded: %d violations", len(_pipeline_data))
+        try:
+            if CACHE_PATH.exists():
+                logger.info("Loading scored pipeline cache: %s", CACHE_PATH)
+                cached = pd.read_parquet(CACHE_PATH)
+                missing = REQUIRED_SCORED_COLUMNS.difference(cached.columns)
+                if not missing:
+                    _pipeline_data = cached
+                    logger.info("Scored cache loaded: %d violations", len(_pipeline_data))
+                    return
+                logger.warning("Ignoring stale scored cache, missing columns: %s", sorted(missing))
+
+            logger.info("Building base pipeline from raw CSV...")
+            _pipeline_data = run_pipeline(CSV_PATH, junction_coords=_junction_coords)
+            _pipeline_data = run_congestion_cost(_pipeline_data, _junction_coords)
+            CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            _pipeline_data.to_parquet(CACHE_PATH, index=False)
+            logger.info("Base pipeline loaded and cached: %d violations", len(_pipeline_data))
+        except Exception as exc:
+            _pipeline_error = str(exc)
+            _pipeline_data = None
+            logger.exception("Failed to load base pipeline")
+        finally:
+            _pipeline_loading = False
 
 
 def _ensure_models():
@@ -350,7 +389,10 @@ async def get_overview():
 
 
 @app.get("/api/priority-queue/{station}")
-async def get_priority_queue(station: str, top_n: int = 10):
+async def get_priority_queue(
+    station: str,
+    top_n: int = Query(10, ge=1, le=50),
+):
     """Top N highest-impact violations for a given police station."""
     if _pipeline_data is None:
         raise HTTPException(503, "Pipeline not loaded")
@@ -538,9 +580,8 @@ async def get_curbflex():
 
 
 @app.get("/api/dispatch")
-async def get_dispatch(num_trucks: int = 2):
+async def get_dispatch(num_trucks: int = Query(2, ge=1, le=4)):
     """Tow truck shift plan with VRP routing."""
-    num_trucks = max(1, min(num_trucks, 4))
     if _pipeline_data is None or _junction_coords is None:
         raise HTTPException(503, "Pipeline not loaded")
 
@@ -576,13 +617,12 @@ async def get_dispatch(num_trucks: int = 2):
 
 
 @app.get("/api/alerts")
-async def get_alerts(count: int = 10):
+async def get_alerts(count: int = Query(10, ge=1, le=20)):
     """Generate alerts for top priority violations."""
     if _pipeline_data is None:
         raise HTTPException(503, "Pipeline not loaded")
 
     df = _pipeline_data
-    count = min(count, 20)
     top = df.nlargest(count, 'congestion_cost')
 
     alerts = []
@@ -602,7 +642,7 @@ async def get_alerts(count: int = 10):
 
 
 @app.get("/api/repeat-offenders")
-async def get_repeat_offenders(min_violations: int = 3):
+async def get_repeat_offenders(min_violations: int = Query(3, ge=2, le=50)):
     """Vehicles with multiple high-impact violations."""
     if _pipeline_data is None:
         raise HTTPException(503, "Pipeline not loaded")
@@ -713,7 +753,7 @@ async def get_predictions():
 
 @app.get("/api/simulator")
 async def get_simulator(
-    top_n: int = 10,
+    top_n: int = Query(10, ge=1, le=100),
     filter_station: str = None,
     filter_tier: str = None,
 ):
@@ -921,6 +961,8 @@ async def get_early_warning_system():
 async def health():
     return {
         "status": "ok",
+        "pipeline_loading": _pipeline_loading,
+        "pipeline_error": _pipeline_error,
         "pipeline_loaded": _pipeline_data is not None,
         "violations_count": len(_pipeline_data) if _pipeline_data is not None else 0,
         "junctions_count": len(_junction_coords) if _junction_coords is not None else 0,

@@ -24,9 +24,8 @@ function countdownMinutes() {
   const now = new Date()
   const mins = now.getMinutes()
   const secs = now.getSeconds()
-  const remaining = 15 - (mins % 15)
-  const secsLeft = 60 - secs
-  return remaining * 60 + secsLeft
+  const elapsed = (mins % 15) * 60 + secs
+  return elapsed === 0 ? 15 * 60 : 15 * 60 - elapsed
 }
 
 function formatCountdown(totalSeconds) {

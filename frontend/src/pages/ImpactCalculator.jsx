@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { useApi } from '../utils/api'
 import { Target, TrendingDown, Users, Cloud, ArrowRight, Zap } from 'lucide-react'
+import ErrorState from '../components/ErrorState'
 
 export default function ImpactCalculator() {
   const [selectedScenario, setSelectedScenario] = useState(5)
-  const { data, loading } = useApi('/impact-summary')
+  const { data, loading, error, refetch } = useApi('/impact-summary')
 
   if (loading) return <LoadingSkeleton />
+  if (error) return <ErrorState message={error} onRetry={refetch} />
 
   const total = data?.total || {}
   const scenarios = data?.scenarios || []
