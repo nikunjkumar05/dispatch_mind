@@ -17,6 +17,14 @@ PORT="${PORT:-8000}"
 WORKERS="${WORKERS:-2}"
 LOG_LEVEL="${LOG_LEVEL:-info}"
 
+# Decompress dataset CSV if compressed archive exists and raw file is missing
+CSV_FILE="jan to may police violation_anonymized791b166.csv"
+CSV_GZ="${CSV_FILE}.gz"
+if [ ! -f "$CSV_FILE" ] && [ -f "$CSV_GZ" ]; then
+    echo "Decompressing $CSV_GZ -> $CSV_FILE ..."
+    gzip -dk "$CSV_GZ"
+fi
+
 echo "Starting DispatchMind backend on $HOST:$PORT (workers=$WORKERS)"
 
 exec uvicorn "$APP_MODULE" \
