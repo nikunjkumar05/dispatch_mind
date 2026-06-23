@@ -18,6 +18,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY backend/ backend/
 COPY src/ src/
 COPY config/ config/
+COPY scripts/ scripts/
 COPY phantom_risk.py preprocess.py tipping_points.py ./
 COPY ["jan to may police violation_anonymized791b166.csv.gz", "./"]
 RUN gzip -d "jan to may police violation_anonymized791b166.csv.gz"
