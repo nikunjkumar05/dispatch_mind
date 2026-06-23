@@ -6,7 +6,11 @@ from sqlalchemy.pool import QueuePool
 
 logger = logging.getLogger("dispatchmind.database")
 
-DATABASE_URL = os.environ.get("DATABASE_URL", "sqlite:///./data/dispatchmind.db")
+DATABASE_URL = os.environ.get("DATABASE_URL") or "sqlite:///./data/dispatchmind.db"
+
+# SQLAlchemy 1.4+ requires 'postgresql://' instead of 'postgres://'
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 _is_sqlite = "sqlite" in DATABASE_URL
 
