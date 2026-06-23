@@ -62,7 +62,9 @@ def main():
     # 1. Load data
     # ------------------------------------------------------------------
     header("1. Loading Data")
-    data_path = os.environ.get("DISPATCHMIND_CACHE", "data/processed/demo_sample.parquet")
+    # Use demo sample if available, otherwise fall back to env var or full parquet
+    sample_path = "data/processed/demo_sample.parquet"
+    data_path = sample_path if Path(sample_path).exists() else os.environ.get("DISPATCHMIND_CACHE", sample_path)
     coords_path = os.environ.get("DISPATCHMIND_COORDS", "data/external/junction_coords.json")
 
     if not Path(data_path).exists():
