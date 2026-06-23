@@ -18,6 +18,7 @@ frontend/dist/
 *.parquet
 data/processed/*
 !data/processed/dispatchmind_scored.parquet
+!data/processed/demo_sample.parquet
 
 # IDE
 .idea/
