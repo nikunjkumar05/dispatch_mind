@@ -22,11 +22,10 @@ npm-debug.log*
 
 # Data files
 *.csv
-*.parquet
-data/
+!*.csv.gz
 data/raw/
-data/processed/
-data/external/
+data/*.db*
+
 
 # IDE
 .idea/

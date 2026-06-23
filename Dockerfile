@@ -30,6 +30,7 @@ COPY phantom_risk.py preprocess.py tipping_points.py ./
 COPY ["jan to may police violation_anonymized791b166.csv.gz", "./"]
 RUN gzip -d "jan to may police violation_anonymized791b166.csv.gz"
 COPY data/external/ data/external/
+COPY data/processed/ data/processed/
 
 # Copy built frontend static assets into the directory FastAPI expects
 COPY --from=frontend-builder /app/dist /app/frontend/dist
