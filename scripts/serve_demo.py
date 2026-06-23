@@ -24,7 +24,7 @@ class HealthHandler(http.server.BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "text/plain")
             self.end_headers()
-            self.wfile.write(b"DispatchMind CLI Demo — see Render logs for output")
+            self.wfile.write("DispatchMind CLI Demo - see Render logs for output".encode())
 
     def log_message(self, format, *args):
         pass  # suppress HTTP log noise
