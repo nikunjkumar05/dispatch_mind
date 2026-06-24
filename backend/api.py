@@ -238,8 +238,8 @@ def require_role(roles: List[str]):
 def check_route_permissions(request: Request, db: Session = Depends(get_db)):
     path = request.url.path
     
-    # Bypass auth for health, login, errors, and static/documentation routes if any
-    if path in ["/api/health", "/api/auth/login", "/api/errors"] or not path.startswith("/api/"):
+    # Bypass auth for health, login, errors, mappls config, and static/documentation routes if any
+    if path in ["/api/health", "/api/auth/login", "/api/errors", "/api/config/mappls"] or not path.startswith("/api/"):
         return
         
     auth_header = request.headers.get("Authorization")
