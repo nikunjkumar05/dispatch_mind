@@ -14,7 +14,7 @@ import TierBadge from "../components/TierBadge";
 import ScrollReveal from "../components/ScrollReveal";
 import PageHeader from "../components/PageHeader";
 
-const BENGALURU_CENTER = [12.9716, 77.5946];
+const BENGALURU_CENTER = { lat: 12.9716, lng: 77.5946 };
 
 const TIER_RADIUS = {
   CRITICAL: 12,
@@ -100,7 +100,7 @@ export default function MapView() {
         marker.addListener("click", () => {
           setSelectedViolation(v);
           setSelectedZone(null);
-          setFlyTarget([v.latitude, v.longitude]);
+          setFlyTarget({ lat: v.latitude, lng: v.longitude });
         });
         layersRef.current.markers.push(marker);
       });
@@ -116,7 +116,7 @@ export default function MapView() {
           offset: [0, 0],
         });
         marker.addListener("click", () => {
-          setFlyTarget([j.lat, j.lon]);
+          setFlyTarget({ lat: j.lat, lng: j.lon });
           setSelectedViolation(null);
         });
         layersRef.current.markers.push(marker);
@@ -137,7 +137,7 @@ export default function MapView() {
           circle.addListener("click", () => {
             setSelectedZone(zone);
             setSelectedViolation(null);
-            setFlyTarget([zone.center_lat, zone.center_lon]);
+            setFlyTarget({ lat: zone.center_lat, lng: zone.center_lon });
           });
           layersRef.current.circles.push(circle);
         });
