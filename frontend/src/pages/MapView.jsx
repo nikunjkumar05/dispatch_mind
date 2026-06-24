@@ -148,64 +148,87 @@ export default function MapView() {
   }, [data, showSpillover, spilloverData, clearLayers]);
 
   useEffect(() => {
-    const apiKey = import.meta.env.VITE_MAPPLS_API_KEY;
-    if (!apiKey) {
-      setMapError("Mappls API key is missing. Check your .env file.");
-      return;
+    let active = true;
+
+    async function loadMappls() {
+      let apiKey = import.meta.env.VITE_MAPPLS_API_KEY;
+      
+      // If build-time variable is absent, fetch from backend config API
+      if (!apiKey) {
+        try {
+          const res = await fetch("/api/config/mappls");
+          if (res.ok) {
+            const config = await res.json();
+            apiKey = config.apiKey;
+          }
+        } catch (e) {
+          console.warn("Failed to fetch Mappls config from backend", e);
+        }
+      }
+
+      if (!active) return;
+
+      if (!apiKey) {
+        setMapError("Mappls API key is missing. Check your server environment variables.");
+        return;
+      }
+
+      if (initRef.current) return;
+      initRef.current = true;
+
+      // Load map on script load instead of global callback
+      const initMap = () => {
+        try {
+          if (!window.mappls) {
+            setMapError("Map SDK failed to load completely.");
+            return;
+          }
+
+          const mapInstance = new window.mappls.Map('map', {
+            center: BENGALURU_CENTER,
+            zoom: 12,
+            zoomControl: true,
+          });
+
+          if (!mapInstance) {
+            setMapError("Failed to create map instance.");
+            return;
+          }
+
+          mapRef.current = mapInstance;
+          mapInstance.addListener("load", () => {
+            setMapReady(true);
+            setMapError(null);
+          });
+        } catch (err) {
+          console.error("Mappls init error:", err);
+          setMapError("Failed to initialize map tiles.");
+        }
+      };
+
+      // Prevent adding multiple scripts if strict mode runs twice
+      let script = document.getElementById("mappls-sdk-script");
+      if (!script) {
+        script = document.createElement("script");
+        script.id = "mappls-sdk-script";
+        script.src = `https://sdk.mappls.com/map/sdk/web?v=3.0&access_token=${apiKey}`;
+        script.async = true;
+        script.defer = true;
+        script.onload = initMap;
+        script.onerror = () => setMapError("Network error loading Mappls SDK. Is your API key valid?");
+        document.head.appendChild(script);
+      } else {
+        // If script is already there and loaded, we can just call our init manually
+        if (window.mappls && !mapRef.current) {
+          initMap();
+        }
+      }
     }
 
-    if (initRef.current) return;
-    initRef.current = true;
-
-    // Load map on script load instead of global callback
-    const initMap = () => {
-      try {
-        if (!window.mappls) {
-          setMapError("Map SDK failed to load completely.");
-          return;
-        }
-
-        const mapInstance = new window.mappls.Map('map', {
-          center: BENGALURU_CENTER,
-          zoom: 12,
-          zoomControl: true,
-        });
-
-        if (!mapInstance) {
-          setMapError("Failed to create map instance.");
-          return;
-        }
-
-        mapRef.current = mapInstance;
-        mapInstance.addListener("load", () => {
-          setMapReady(true);
-          setMapError(null);
-        });
-      } catch (err) {
-        console.error("Mappls init error:", err);
-        setMapError("Failed to initialize map tiles.");
-      }
-    };
-
-    // Prevent adding multiple scripts if strict mode runs twice
-    let script = document.getElementById("mappls-sdk-script");
-    if (!script) {
-      script = document.createElement("script");
-      script.id = "mappls-sdk-script";
-      script.src = `https://sdk.mappls.com/map/sdk/web?v=3.0&access_token=${apiKey}`;
-      script.async = true;
-      script.defer = true;
-      script.onload = initMap;
-      script.onerror = () => setMapError("Network error loading Mappls SDK. Is your API key valid?");
-      document.head.appendChild(script);
-    } else {
-      // If script is already there and loaded, we can just call our init manually
-      if (window.mappls && !mapRef.current) {
-        initMap();
-      }
-    }
+    loadMappls();
 
     return () => {
+      active = false;
       // We do not remove the script on unmount to save bandwidth,
       // but we do want to clean up the map instance.
       if (mapRef.current && window.mappls) {

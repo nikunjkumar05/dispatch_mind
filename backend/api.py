@@ -3166,6 +3166,13 @@ async def report_client_error(report: ClientErrorReport):
     return {"status": "ok"}
 
 
+@app.get("/api/config/mappls")
+async def get_mappls_config():
+    """Return the Mappls API key from environment variables at runtime."""
+    key = os.environ.get("VITE_MAPPLS_API_KEY") or os.environ.get("MAPPLS_API_KEY")
+    return {"apiKey": key or ""}
+
+
 @app.get("/api/health")
 async def health():
     from backend.database import check_db_health
