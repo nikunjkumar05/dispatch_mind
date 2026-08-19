@@ -2,7 +2,7 @@
 
 An AI system that helps Bengaluru Traffic Police find and fix traffic jams caused by illegal parking.
 
-**Live Demo:** https://dispatchmind-production.up.railway.app/
+**Live Demo:** https://dispatch-mind.vercel.app/
 
 ---
 
