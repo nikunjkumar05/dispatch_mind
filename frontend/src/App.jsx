@@ -2,6 +2,7 @@ import { useState, useEffect } from "react"
 import AppRoutes from "./app/AppRoutes"
 import AppShell from "./layout/AppShell"
 import Login from "./pages/Login"
+import { API_BASE } from "./utils/api"
 
 export default function App() {
   const [user, setUser] = useState(null)
@@ -34,7 +35,7 @@ export default function App() {
         scout: { username: "scout", password: "scout" },
       }[newRole]
       
-      const response = await fetch("/api/auth/login", {
+      const response = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(creds),

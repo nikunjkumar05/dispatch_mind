@@ -3,6 +3,7 @@ import ReactDOM from 'react-dom/client'
 import { BrowserRouter } from 'react-router-dom'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary'
+import { API_BASE } from './utils/api'
 import './styles/index.css'
 
 function reportClientError(type, event) {
@@ -14,10 +15,11 @@ function reportClientError(type, event) {
     line: event.lineno,
     column: event.colno,
   }
+  const errorUrl = `${API_BASE}/errors`
   if (navigator.sendBeacon) {
-    navigator.sendBeacon('/api/errors', JSON.stringify(payload))
+    navigator.sendBeacon(errorUrl, JSON.stringify(payload))
   } else {
-    fetch('/api/errors', {
+    fetch(errorUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),

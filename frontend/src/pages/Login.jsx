@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Lock, User, Camera, Trophy, AlertCircle, ArrowRight, ShieldCheck } from "lucide-react";
+import { API_BASE } from "../utils/api";
 
 export default function Login({ onLoginSuccess }) {
   const [username, setUsername] = useState("");
@@ -22,7 +23,7 @@ export default function Login({ onLoginSuccess }) {
     }
 
     try {
-      const response = await fetch("/api/auth/login", {
+      const response = await fetch(`${API_BASE}/auth/login`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

@@ -322,7 +322,7 @@ app.add_middleware(
         o.strip()
         for o in os.environ.get(
             "CORS_ORIGINS",
-            "http://localhost:3000,http://127.0.0.1:3000,https://*.onrender.com",
+            "http://localhost:3000,http://127.0.0.1:3000,https://*.onrender.com,https://*.vercel.app",
         ).split(",")
         if o.strip()
     ],

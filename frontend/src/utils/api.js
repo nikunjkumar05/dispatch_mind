@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 
-const API_BASE = "/api";
+export const API_BASE = import.meta.env.VITE_API_URL || "/api";
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const REQUEST_TIMEOUT_MS = 30000;
 const RETRY_503_DELAY_MS = 3000;

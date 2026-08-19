@@ -157,7 +157,8 @@ export default function MapView() {
       // If build-time variable is absent and hardcoded key is not used, fetch from backend config API
       if (!apiKey) {
         try {
-          const res = await fetch("/api/config/mappls");
+          const { API_BASE } = await import("../utils/api");
+          const res = await fetch(`${API_BASE}/config/mappls`);
           if (res.ok) {
             const config = await res.json();
             apiKey = config.apiKey;
