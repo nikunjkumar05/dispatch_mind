@@ -15,5 +15,7 @@ python-multipart>=0.0.6
 httpx>=0.25.0
 sqlalchemy>=2.0.0
 alembic>=1.13.0
+scipy>=1.11.0
+shap>=0.43.0
 prometheus-client>=0.20.0
 psycopg2-binary>=2.9.0
