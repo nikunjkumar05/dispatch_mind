@@ -1,5 +1,8 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { MapContainer, TileLayer, Marker, Circle, Popup, useMap } from "react-leaflet";
+import L from "leaflet";
+import "leaflet/dist/leaflet.css";
 import { useApi, tierColor } from "../utils/api";
 import {
   MapPin,
@@ -14,7 +17,7 @@ import TierBadge from "../components/TierBadge";
 import ScrollReveal from "../components/ScrollReveal";
 import PageHeader from "../components/PageHeader";
 
-const BENGALURU_CENTER = { lat: 12.9716, lng: 77.5946 };
+const BENGALURU_CENTER = [12.9716, 77.5946];
 
 const TIER_RADIUS = {
   CRITICAL: 12,
@@ -23,14 +26,32 @@ const TIER_RADIUS = {
   LOW: 6,
 };
 
-function createCircleIcon(color, size = 12) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${size/2}" cy="${size/2}" r="${size/2 - 1}" fill="${color}" stroke="#fff" stroke-width="1.5"/></svg>`;
-  return "data:image/svg+xml," + encodeURIComponent(svg);
+function circleIcon(color, size = 12) {
+  return L.divIcon({
+    className: "dispatchmind-marker",
+    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;background:${color};border:1.5px solid #fff;box-shadow:0 0 6px rgba(0,0,0,0.5);"></div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
 }
 
-function createRingIcon(color = "#3B82F6", size = 20) {
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}"><circle cx="${size/2}" cy="${size/2}" r="${size/2 - 2}" fill="transparent" stroke="${color}" stroke-width="2"/></svg>`;
-  return "data:image/svg+xml," + encodeURIComponent(svg);
+function ringIcon(color = "#3B82F6", size = 22) {
+  return L.divIcon({
+    className: "dispatchmind-marker",
+    html: `<div style="width:${size}px;height:${size}px;border-radius:9999px;border:2px solid ${color};background:transparent;"></div>`,
+    iconSize: [size, size],
+    iconAnchor: [size / 2, size / 2],
+  });
+}
+
+function FlyTo({ target }) {
+  const map = useMap();
+  useEffect(() => {
+    if (target) {
+      map.flyTo([target.lat, target.lng], 15, { duration: 1.2 });
+    }
+  }, [map, target]);
+  return null;
 }
 
 export default function MapView() {
@@ -45,224 +66,11 @@ export default function MapView() {
   const [selectedViolation, setSelectedViolation] = useState(null);
   const [selectedZone, setSelectedZone] = useState(null);
   const [flyTarget, setFlyTarget] = useState(null);
-  const [mapReady, setMapReady] = useState(false);
-  const [mapError, setMapError] = useState(null);
-
-  const mapRef = useRef(null);
-  const layersRef = useRef({ markers: [], circles: [], infoWindows: [] });
-  const initRef = useRef(false);
-
-  const clearLayers = useCallback(() => {
-    if (!mapRef.current || !window.mappls) return;
-    try {
-      layersRef.current.markers.forEach((m) => {
-        window.mappls.removeLayer({ map: mapRef.current, layer: m });
-      });
-      layersRef.current.circles.forEach((c) => {
-        window.mappls.removeLayer({ map: mapRef.current, layer: c });
-      });
-    } catch (e) {
-      console.warn("Error clearing layers", e);
-    }
-    layersRef.current = { markers: [], circles: [], infoWindows: [] };
-  }, []);
-
-  const renderLayers = useCallback(() => {
-    if (!mapRef.current || !data || !window.mappls) return;
-    clearLayers();
-
-    const violations = data?.violations || [];
-    const junctions = data?.junctions || [];
-
-    try {
-      violations.forEach((v) => {
-        const color = tierColor(v.impact_tier);
-        const icon = createCircleIcon(color, TIER_RADIUS[v.impact_tier] || 8);
-        const marker = new window.mappls.Marker({
-          map: mapRef.current,
-          position: { lat: v.latitude, lng: v.longitude },
-          icon,
-          width: TIER_RADIUS[v.impact_tier] || 8,
-          height: TIER_RADIUS[v.impact_tier] || 8,
-          offset: [0, 0],
-          popupHtml: `
-            <div style="font-family: Inter, sans-serif; padding: 4px; min-width: 160px;">
-              <strong>${v.mapped_junction || "Violation"}</strong><br/>
-              <span style="color:#666; font-size:12px;">
-                Vehicle: ${v.vehicle_type}<br/>
-                Delay: ${v.duration_minutes} min<br/>
-                Score: ${v.gridlock_score}
-              </span>
-            </div>
-          `,
-          popupOptions: { openPopup: false, autoClose: true, maxWidth: 280 },
-        });
-        marker.addListener("click", () => {
-          setSelectedViolation(v);
-          setSelectedZone(null);
-          setFlyTarget({ lat: v.latitude, lng: v.longitude });
-        });
-        layersRef.current.markers.push(marker);
-      });
-
-      junctions.forEach((j) => {
-        const icon = createRingIcon("#3B82F6", 22);
-        const marker = new window.mappls.Marker({
-          map: mapRef.current,
-          position: { lat: j.lat, lng: j.lon },
-          icon,
-          width: 22,
-          height: 22,
-          offset: [0, 0],
-        });
-        marker.addListener("click", () => {
-          setFlyTarget({ lat: j.lat, lng: j.lon });
-          setSelectedViolation(null);
-        });
-        layersRef.current.markers.push(marker);
-      });
-
-      if (showSpillover && spilloverData?.zones) {
-        spilloverData.zones.forEach((zone) => {
-          const circle = new window.mappls.Circle({
-            map: mapRef.current,
-            center: { lat: String(zone.center_lat), lng: String(zone.center_lon) },
-            radius: 200,
-            strokeColor: "#a855f7",
-            strokeOpacity: 0.8,
-            strokeWeight: 2,
-            fillColor: "#a855f7",
-            fillOpacity: 0.2,
-          });
-          circle.addListener("click", () => {
-            setSelectedZone(zone);
-            setSelectedViolation(null);
-            setFlyTarget({ lat: zone.center_lat, lng: zone.center_lon });
-          });
-          layersRef.current.circles.push(circle);
-        });
-      }
-    } catch (e) {
-      console.warn("Error rendering layers", e);
-    }
-  }, [data, showSpillover, spilloverData, clearLayers]);
-
-  useEffect(() => {
-    let active = true;
-
-    async function loadMappls() {
-      let apiKey = import.meta.env.VITE_MAPPLS_API_KEY || "";
-
-      // Fall back to backend config endpoint if no build-time key is set
-      if (!apiKey) {
-        try {
-          const { API_BASE } = await import("../utils/api");
-          const res = await fetch(`${API_BASE}/config/mappls`);
-          if (res.ok) {
-            const config = await res.json();
-            apiKey = config.apiKey;
-          }
-        } catch (e) {
-          console.warn("Failed to fetch Mappls config from backend", e);
-        }
-      }
-
-      if (!active) return;
-
-      if (!apiKey) {
-        setMapError("Mappls API key is missing. Check your server environment variables.");
-        return;
-      }
-
-      if (initRef.current) return;
-      initRef.current = true;
-
-      // Load map on script load instead of global callback
-      const initMap = () => {
-        try {
-          if (!window.mappls) {
-            setMapError("Map SDK failed to load completely.");
-            return;
-          }
-
-          const mapInstance = new window.mappls.Map('map', {
-            center: BENGALURU_CENTER,
-            zoom: 12,
-            zoomControl: true,
-          });
-
-          if (!mapInstance) {
-            setMapError("Failed to create map instance.");
-            return;
-          }
-
-          mapRef.current = mapInstance;
-          mapInstance.addListener("load", () => {
-            setMapReady(true);
-            setMapError(null);
-          });
-        } catch (err) {
-          console.error("Mappls init error:", err);
-          setMapError("Failed to initialize map tiles.");
-        }
-      };
-
-      // Prevent adding multiple scripts if strict mode runs twice
-      let script = document.getElementById("mappls-sdk-script");
-      if (!script) {
-        script = document.createElement("script");
-        script.id = "mappls-sdk-script";
-        script.src = `https://sdk.mappls.com/map/sdk/web?v=3.0&access_token=${apiKey}`;
-        script.async = true;
-        script.defer = true;
-        script.onload = initMap;
-        script.onerror = () => setMapError("Network error loading Mappls SDK. Is your API key valid?");
-        document.head.appendChild(script);
-      } else {
-        // If script is already there and loaded, we can just call our init manually
-        if (window.mappls && !mapRef.current) {
-          initMap();
-        }
-      }
-    }
-
-    loadMappls();
-
-    return () => {
-      active = false;
-      // We do not remove the script on unmount to save bandwidth,
-      // but we do want to clean up the map instance.
-      if (mapRef.current && window.mappls) {
-        try {
-           const mapEl = document.getElementById("map");
-           if (mapEl) mapEl.innerHTML = "";
-        } catch (e) {}
-        mapRef.current = null;
-      }
-      initRef.current = false;
-      setMapReady(false);
-    };
-  }, []);
-
-  useEffect(() => {
-    if (!mapReady || !mapRef.current || !window.mappls) return;
-
-    if (flyTarget) {
-      try {
-        mapRef.current.flyTo({ center: flyTarget, zoom: 15 });
-      } catch (e) {
-        console.warn("FlyTo failed", e);
-      }
-    }
-
-    renderLayers();
-  }, [mapReady, flyTarget, renderLayers]);
 
   const violations = data?.violations || [];
   const junctions = data?.junctions || [];
-  const showLoadingOverlay = (loading || !mapReady) && !mapError && !error;
-  const showApiError = error && mapReady;
-  const showApiErrorOverlay = error && !mapReady && !mapError && !loading;
+  const spilloverZones = spilloverData?.zones || [];
+  const showLoadingOverlay = loading && !error;
 
   return (
     <div className="space-y-4">
@@ -276,7 +84,7 @@ export default function MapView() {
           />
           <div className="text-xs text-muted flex items-center gap-1">
             <Layers className="w-3 h-3" />
-            Mappls
+            OpenStreetMap
           </div>
         </div>
       </ScrollReveal>
@@ -301,11 +109,106 @@ export default function MapView() {
         </div>
       </ScrollReveal>
 
-      <div className="relative rounded-xl border border-border" style={{ height: "70vh" }}>
-        <div
-          id="map"
-          style={{ width: "100%", height: "100%" }}
-        />
+      <div className="relative rounded-xl border border-border overflow-hidden" style={{ height: "70vh" }}>
+        {error && !loading ? (
+          <div className="absolute inset-0 flex items-center justify-center bg-base/80 z-[1001]">
+            <ErrorState message={error} onRetry={refetch} />
+          </div>
+        ) : (
+          <MapContainer
+            center={BENGALURU_CENTER}
+            zoom={12}
+            style={{ width: "100%", height: "100%" }}
+            zoomControl
+          >
+            <TileLayer
+              attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
+            <FlyTo target={flyTarget} />
+
+            {violations.map((v, i) => (
+              <Marker
+                key={`v-${i}`}
+                position={[v.latitude, v.longitude]}
+                icon={circleIcon(tierColor(v.impact_tier), TIER_RADIUS[v.impact_tier] || 8)}
+                eventHandlers={{
+                  click: () => {
+                    setSelectedViolation(v);
+                    setSelectedZone(null);
+                    setFlyTarget({ lat: v.latitude, lng: v.longitude });
+                  },
+                }}
+              >
+                <Popup>
+                  <div style={{ fontFamily: "Inter, sans-serif", padding: 4, minWidth: 160 }}>
+                    <strong>{v.mapped_junction || "Violation"}</strong>
+                    <br />
+                    <span style={{ color: "#666", fontSize: 12 }}>
+                      Vehicle: {v.vehicle_type}
+                      <br />
+                      Delay: {v.duration_minutes} min
+                      <br />
+                      Score: {v.gridlock_score}
+                    </span>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+
+            {junctions.map((j, i) => (
+              <Marker
+                key={`j-${i}`}
+                position={[j.lat, j.lon]}
+                icon={ringIcon("#3B82F6", 22)}
+                eventHandlers={{
+                  click: () => {
+                    setFlyTarget({ lat: j.lat, lng: j.lon });
+                    setSelectedViolation(null);
+                  },
+                }}
+              >
+                <Popup>
+                  <div style={{ fontFamily: "Inter, sans-serif", padding: 4 }}>
+                    <strong>{j.code}</strong>
+                    <br />
+                    <span style={{ color: "#666", fontSize: 12 }}>
+                      Violations: {j.violation_count}
+                      <br />
+                      Delay: {j.total_delay} min
+                    </span>
+                  </div>
+                </Popup>
+              </Marker>
+            ))}
+
+            {showSpillover &&
+              spilloverZones.map((zone, i) => (
+                <Circle
+                  key={`z-${i}`}
+                  center={[Number(zone.center_lat), Number(zone.center_lon)]}
+                  radius={200}
+                  pathOptions={{
+                    color: "#a855f7",
+                    opacity: 0.8,
+                    weight: 2,
+                    fillColor: "#a855f7",
+                    fillOpacity: 0.2,
+                  }}
+                  eventHandlers={{
+                    click: () => {
+                      setSelectedZone(zone);
+                      setSelectedViolation(null);
+                      setFlyTarget({
+                        lat: Number(zone.center_lat),
+                        lng: Number(zone.center_lon),
+                      });
+                    },
+                  }}
+                />
+              ))}
+          </MapContainer>
+        )}
 
         {/* Loading overlay */}
         {showLoadingOverlay && (
@@ -313,44 +216,14 @@ export default function MapView() {
             <div className="flex flex-col items-center gap-3">
               <div className="w-8 h-8 border-2 border-neon-blue/30 border-t-neon-blue rounded-full animate-spin" />
               <p className="text-muted text-sm font-medium">
-                {loading ? "Connecting to server..." : "Loading tactical map..."}
+                Connecting to server...
               </p>
             </div>
           </div>
         )}
 
-        {/* API error overlay (before map is ready) */}
-        {showApiErrorOverlay && (
-          <div className="absolute inset-0 flex items-center justify-center bg-base/80 z-[1001]">
-            <ErrorState message={error} onRetry={refetch} />
-          </div>
-        )}
-
-        {/* Map error overlay */}
-        {mapError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-base/80 z-[1001]">
-            <div className="glass-card-static p-6 max-w-md text-center">
-              <p className="text-signal-red font-medium mb-2">Map Error</p>
-              <p className="text-muted text-sm mb-4">{mapError}</p>
-              <button
-                onClick={() => window.location.reload()}
-                className="bg-neon-blue text-white px-4 py-2 rounded font-medium text-sm"
-              >
-                Retry
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* API error overlay */}
-        {showApiError && (
-          <div className="absolute inset-0 flex items-center justify-center bg-base/80 z-[1001]">
-            <ErrorState message={error} onRetry={refetch} />
-          </div>
-        )}
-
         {/* Legend */}
-        {mapReady && (
+        {!loading && !error && (
           <>
             <div className="absolute bottom-4 left-4 z-[1000] glass-card-static p-3">
               <p className="text-[10px] font-semibold text-muted uppercase tracking-wider mb-2">
@@ -488,8 +361,8 @@ export default function MapView() {
                   <span className="text-muted">
                     Center:{" "}
                     <span className="font-mono text-chalk">
-                      {selectedZone.center_lat.toFixed(4)},{" "}
-                      {selectedZone.center_lon.toFixed(4)}
+                      {Number(selectedZone.center_lat).toFixed(4)},{" "}
+                      {Number(selectedZone.center_lon).toFixed(4)}
                     </span>
                   </span>
                 </div>
