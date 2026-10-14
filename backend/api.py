@@ -308,16 +308,19 @@ app = FastAPI(
     dependencies=[Depends(check_route_permissions)],
 )
 
+_cors_env = os.environ.get(
+    "CORS_ORIGINS",
+    "http://localhost:3000,http://127.0.0.1:3000",
+)
+_allow_origins = [o.strip() for o in _cors_env.split(",") if o.strip()]
+# NOTE: Starlette's allow_origins does NOT support subdomain wildcards like
+# "https://*.vercel.app" — such entries silently never match. Use a regex.
+_allow_origin_regex = r"https://([a-z0-9-]+\.)*(vercel\.app|onrender\.com)"
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        o.strip()
-        for o in os.environ.get(
-            "CORS_ORIGINS",
-            "http://localhost:3000,http://127.0.0.1:3000,https://*.onrender.com,https://*.vercel.app",
-        ).split(",")
-        if o.strip()
-    ],
+    allow_origins=_allow_origins,
+    allow_origin_regex=_allow_origin_regex,
     allow_methods=["*"],
     allow_headers=["*"],
     allow_credentials=False,
