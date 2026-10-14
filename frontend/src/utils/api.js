@@ -1,6 +1,15 @@
 import { useState, useEffect } from "react";
 
-export const API_BASE = import.meta.env.VITE_API_URL || "/api";
+// Accepts VITE_API_URL with or without a trailing "/api"
+// (e.g. both "https://x.onrender.com" and "https://x.onrender.com/api" work).
+// Falls back to relative "/api" for local dev behind the Vite proxy.
+function normalizeBase(raw) {
+  const base = (raw || "").replace(/\/+$/, "");
+  if (!base) return "/api";
+  return base.replace(/\/api$/, "") + "/api";
+}
+
+export const API_BASE = normalizeBase(import.meta.env.VITE_API_URL);
 const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 const REQUEST_TIMEOUT_MS = 30000;
 const RETRY_503_DELAY_MS = 3000;
