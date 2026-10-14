@@ -2,7 +2,6 @@ import { memo, useMemo, useState, useEffect } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 import { Menu, X, ChevronRight, ShieldCheck, Sun, Moon, Camera, LogOut } from 'lucide-react'
 import { NAV_BY_ROLE, ROLE_LABELS } from '../app/navigation'
-import DemoOverlay from '../components/DemoOverlay'
 
 function ThemeToggle() {
   const [isDark, setIsDark] = useState(() => {
@@ -86,7 +85,7 @@ const ROLE_ICONS = {
   scout: Camera,
 }
 
-export default function AppShell({ role, setRole, children }) {
+export default function AppShell({ role, children }) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [scrolled, setScrolled] = useState(false)
   const location = useLocation()
@@ -135,27 +134,14 @@ export default function AppShell({ role, setRole, children }) {
           </div>
         </div>
 
-        {/* Role Selector */}
+        {/* Current Role */}
         <div className="px-5 py-4 border-b border-border">
-          <label className="text-[10px] uppercase tracking-[0.2em] text-muted/60 font-semibold mb-2 block" htmlFor="role-selector">
+          <label className="text-[10px] uppercase tracking-[0.2em] text-muted/60 font-semibold mb-2 block">
             Role
           </label>
-          <select
-            id="role-selector"
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            className="input-glass text-xs py-2"
-          >
-            {Object.entries(ROLE_LABELS).map(([value, label]) => (
-              <option 
-                key={value} 
-                value={value}
-                className="bg-[#ffffff] text-[#111111] dark:bg-[#121217] dark:text-[#ffffff]"
-              >
-                {label}
-              </option>
-            ))}
-          </select>
+          <div className="input-glass text-xs py-2 text-chalk font-medium">
+            {ROLE_LABELS[role] || role}
+          </div>
         </div>
 
         {/* Navigation */}
@@ -228,25 +214,12 @@ export default function AppShell({ role, setRole, children }) {
         </div>
 
         <div className="px-5 py-4 border-b border-border">
-          <label className="text-[10px] uppercase tracking-[0.2em] text-muted/60 font-semibold mb-2 block" htmlFor="role-selector-mobile">
+          <label className="text-[10px] uppercase tracking-[0.2em] text-muted/60 font-semibold mb-2 block">
             Role
           </label>
-          <select
-            id="role-selector-mobile"
-            value={role}
-            onChange={(e) => setRole(e.target.value)}
-            className="input-glass text-xs py-2"
-          >
-            {Object.entries(ROLE_LABELS).map(([value, label]) => (
-              <option 
-                key={value} 
-                value={value}
-                className="bg-[#ffffff] text-[#111111] dark:bg-[#121217] dark:text-[#ffffff]"
-              >
-                {label}
-              </option>
-            ))}
-          </select>
+          <div className="input-glass text-xs py-2 text-chalk font-medium">
+            {ROLE_LABELS[role] || role}
+          </div>
         </div>
 
         <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-1">
@@ -315,7 +288,6 @@ export default function AppShell({ role, setRole, children }) {
           </div>
         </div>
       </main>
-      <DemoOverlay role={role} />
     </div>
   )
 }
