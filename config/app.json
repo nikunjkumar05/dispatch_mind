@@ -141,38 +141,10 @@
     "min_violations_for_test": 5,
     "min_common_bins": 10
   },
-  "validation": {
-    "weeks_in_dataset": 20,
-    "assumed_enforcement_reduction": 0.40,
-    "fuel_savings_per_veh_min": 0.5,
-    "silk_board_junctions": ["Silk Board", "Bommanahalli", "HSR"],
-    "pilot_target_junction": "BTP148 - 17th Main, Doopanahalli Bus Stop",
-    "pilot_duration_weeks": 2,
-    "pilot_effectiveness_threshold": 0.3,
-    "temporal_split": {
-      "train_months": [11, 12, 1],
-      "test_month": 2
-    },
-    "spatial_cv": {
-      "leave_one_junction_out": true,
-      "min_junctions_for_test": 5
-    },
-    "cross_validation": {
-      "n_folds": 5,
-      "min_junctions_per_fold": 3
-    }
-  },
   "curbflex": {
     "weekly_threshold": 50,
     "repeat_offenders_min_violations": 3,
     "high_impact_tiers": ["CRITICAL", "HIGH"]
-  },
-  "enhanced_cascade": {
-    "max_lag_minutes": 120,
-    "lag_step_minutes": 5,
-    "correlation_threshold": 0.2,
-    "min_violations": 5,
-    "min_common_bins": 10
   },
   "pilot": {
     "target_junction": "BTP148 - 17th Main, Doopanahalli Bus Stop",

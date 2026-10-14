@@ -87,14 +87,6 @@ def get_curbflex_config() -> Dict[str, Any]:
     return get_config().get('curbflex', {})
 
 
-def get_validation_config() -> Dict[str, Any]:
-    return get_config().get('validation', {})
-
-
-def get_enhanced_cascade_config() -> Dict[str, Any]:
-    return get_config().get('enhanced_cascade', {})
-
-
 def get_bengaluru_config() -> Dict[str, Any]:
     return get_config().get('bengaluru', {})
 
