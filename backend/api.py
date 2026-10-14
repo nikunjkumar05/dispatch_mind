@@ -35,18 +35,13 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from backend.database import get_db, SessionLocal
 from backend.models import User, UserSession
-from phantom_risk import calculate_phantom_risk_score
-from preprocess import preprocess
-from src.cascade import run_cascade_analysis
-from src.gnn_cascade import run_gnn_cascade
-from src.congestion_cost import run_congestion_cost
-from src.curbflex import run_curbflex
-from src.data_pipeline import run_pipeline, validate_pipeline_data
-from src.dispatch import run_dispatch
-from src.prediction import run_prediction
 from src.realtime_alerts import ViolationAlertSystem
-from src.spillover_ai import detect_spillover_zones
-from src.presence_model import compute_presence_for_violation, filter_present_violations
+
+# NOTE: heavy ML modules (src.cascade, src.prediction, src.dispatch,
+# phantom_risk, preprocess, etc.) are imported lazily inside functions.
+# Importing them at module load pulls xgboost/lightgbm/scipy/statsmodels/
+# ortools into RAM before the server can even answer /api/health or
+# /api/auth/login — fatal on Render's 512 MB free tier.
 
 _request_id_ctx = threading.local()
 
@@ -128,24 +123,21 @@ async def lifespan(app: FastAPI):
         logger.error(f"Failed to initialize database tables: {e}")
 
     def _bg_load():
+        # Low-memory mode: load ONLY the scored parquet at startup.
+        # Everything else (cascade, phantom, capacity, causal impact,
+        # xgboost/lightgbm training) is computed lazily on first request
+        # via the _ensure_* helpers. Precomputing all of it at boot with
+        # multiple DataFrame copies is what OOMs Render's 512 MB tier.
         for attempt in range(3):
             try:
                 logger.info("Pipeline warm-up: loading base data...")
                 _ensure_base_data()
                 if _pipeline_data is not None:
-                    logger.info("Pipeline warm-up: precomputing overview stats...")
-                    _precompute_all()
-                    logger.info("Pipeline warm-up: computing phantom risk scores...")
-                    _ensure_phantom_data()
-                    logger.info("Pipeline warm-up: computing capacity loss...")
-                    _ensure_capacity()
-                    logger.info("Pipeline warm-up: computing repeat offenders...")
-                    _ensure_repeat_offenders()
-                    logger.info("Pipeline warm-up: training causal impact model...")
-                    _ensure_causal_impact()
-                    logger.info("Pipeline warm-up: training prediction models...")
-                    _ensure_predictions()
-                    logger.info("Pipeline warm-up: all components ready.")
+                    logger.info(
+                        "Pipeline warm-up: base data ready (%d rows). "
+                        "Remaining components will load lazily.",
+                        len(_pipeline_data),
+                    )
                     return
             except Exception:
                 logger.exception("Pipeline failed to load (attempt %d/3)", attempt + 1)
@@ -608,6 +600,8 @@ def _ensure_base_data():
                     _pipeline_data = cached
                     _pipeline_loading = False
                     _normalize_pipeline_dates()
+                    from src.data_pipeline import validate_pipeline_data
+
                     validation = validate_pipeline_data(_pipeline_data)
                     _pipeline_validation = validation
                     for issue in validation["issues"]:
@@ -621,6 +615,9 @@ def _ensure_base_data():
                 )
 
             logger.info("Building base pipeline from raw CSV...")
+            from src.congestion_cost import run_congestion_cost
+            from src.data_pipeline import run_pipeline, validate_pipeline_data
+
             _pipeline_data = run_pipeline(CSV_PATH, junction_coords=_junction_coords)
             _pipeline_data = run_congestion_cost(_pipeline_data, _junction_coords)
             validation = validate_pipeline_data(_pipeline_data)
@@ -652,7 +649,7 @@ def _ensure_models():
             logger.warning("Cannot train models: base data not loaded")
             return
         logger.info("Preparing features and training models...")
-        from src.prediction import prepare_features
+        from src.prediction import prepare_features, run_prediction
         _prepared_df, _prepared_features, _ = prepare_features(_pipeline_data.copy())
         _models = run_prediction(_pipeline_data)
         logger.info(
@@ -671,6 +668,8 @@ def _ensure_cascade():
             logger.warning("Cannot run cascade: base data not loaded")
             return
         logger.info("Running cascade analysis...")
+        from src.cascade import run_cascade_analysis
+
         _cascade = run_cascade_analysis(_pipeline_data, _junction_coords)
         logger.info("Cascade analysis done.")
 
@@ -686,6 +685,8 @@ def _ensure_curbflex():
             logger.warning("Cannot run CurbFlex: base data not loaded")
             return
         logger.info("Running CurbFlex analysis...")
+        from src.curbflex import run_curbflex
+
         _curbflex = run_curbflex(_pipeline_data)
         logger.info("CurbFlex done.")
 
@@ -701,6 +702,8 @@ def _ensure_spillover():
             logger.warning("Cannot run Spillover detection: base data not loaded")
             return
         logger.info("Running AI Spillover Detection...")
+        from src.spillover_ai import detect_spillover_zones
+
         _spillover_zones = detect_spillover_zones(_pipeline_data)
         logger.info("Spillover detection done: %d zones found.", len(_spillover_zones))
 
@@ -781,6 +784,8 @@ def _ensure_phantom_data():
                 )
             else:
                 logger.info("Pipeline not loaded, falling back to preprocess...")
+                from preprocess import preprocess
+
                 _phantom_data = preprocess()
                 cache_path.parent.mkdir(parents=True, exist_ok=True)
                 _phantom_data.to_parquet(cache_path, index=False)
@@ -1522,6 +1527,8 @@ async def get_priority_queue(
         raise HTTPException(503, "Pipeline not loaded")
 
     def _compute():
+        from src.presence_model import compute_presence_for_violation
+
         df = _pipeline_data
         if station != "ALL":
             df = df[df["police_station"] == station]
@@ -1714,6 +1721,8 @@ def _ensure_cascade_gnn():
         if _pipeline_data is None or _junction_coords is None:
             return
         try:
+            from src.gnn_cascade import run_gnn_cascade
+
             _cascade_gnn = run_gnn_cascade(_pipeline_data, _junction_coords)
         except Exception as e:
             logger.error(f"GNN cascade failed: {e}")
@@ -1756,6 +1765,8 @@ async def get_dispatch(num_trucks: int = Query(2, ge=1, le=4)):
         raise HTTPException(503, "Pipeline not loaded")
 
     try:
+        from src.dispatch import run_dispatch
+
         plan = await asyncio.wait_for(
             asyncio.to_thread(
                 run_dispatch, _pipeline_data, _junction_coords, num_trucks
@@ -2033,6 +2044,8 @@ async def get_early_warning_system():
     filtered = _phantom_data[
         _phantom_data["time_block"].isin([current_tb, next_tb])
     ].copy()
+    from phantom_risk import calculate_phantom_risk_score
+
     risk_df = calculate_phantom_risk_score(filtered)
 
     def fmt_12h(tb):

@@ -27,6 +27,14 @@ services:
         value: jan to may police violation_anonymized791b166.csv
       - key: DISPATCHMIND_COORDS
         value: data/external/junction_coords.json
+      - key: OMP_NUM_THREADS
+        value: 1
+      - key: OPENBLAS_NUM_THREADS
+        value: 1
+      - key: MKL_NUM_THREADS
+        value: 1
+      - key: NUMEXPR_NUM_THREADS
+        value: 1
 
 databases:
   - name: dispatchmind-db
