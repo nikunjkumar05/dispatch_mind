@@ -12,6 +12,13 @@ DATABASE_URL = os.environ.get("DATABASE_URL") or "sqlite:///./data/dispatchmind.
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
+# Pin the driver explicitly: SQLAlchemy 2.1+ defaults postgresql:// to the
+# psycopg (v3) driver, which is not installed. We ship psycopg2-binary.
+if DATABASE_URL.startswith("postgresql://"):
+    DATABASE_URL = DATABASE_URL.replace(
+        "postgresql://", "postgresql+psycopg2://", 1
+    )
+
 _is_sqlite = "sqlite" in DATABASE_URL
 
 if _is_sqlite:
